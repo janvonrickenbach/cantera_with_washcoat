@@ -1,0 +1,29 @@
+import os
+from distutils.core import setup
+from Cython.Build import cythonize
+
+exts = cythonize("cantera/_cantera.pyx")
+
+exts[0].include_dirs += @py_include_dirs@
+exts[0].extra_compile_args += @py_extra_compiler_args@
+exts[0].libraries += @py_cantera_libs@
+exts[0].library_dirs += @py_libdirs@
+exts[0].extra_link_args += @py_extra_link_args@
+
+setup(name="Cantera",
+      version="@cantera_version@",
+      description="The Cantera Python Interface",
+      long_description="""
+              """,
+      author="Raymond Speth",
+      author_email="speth@mit.edu",
+      url="http://code.google.com/p/cantera",
+      packages = ['cantera',
+                  'cantera.data',
+                  'cantera.test',
+                  'cantera.test.data',
+                  'cantera.examples'],
+      ext_modules = exts,
+      package_data = {'cantera.data': ['*.*'],
+                      'cantera.test.data': ['*.*'],
+                      'cantera.examples': ['*/*.*']})
