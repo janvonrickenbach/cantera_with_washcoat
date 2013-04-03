@@ -13,7 +13,6 @@ interfaces/matlab/ctpath.m
 stage/
 .sconsign.dblite
 .sconf_temp
-cantera.conf*
 config.log
 *.lib
 *.exp
