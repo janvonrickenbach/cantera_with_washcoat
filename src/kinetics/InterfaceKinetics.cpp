@@ -13,6 +13,7 @@
 #include "cantera/kinetics/RateCoeffMgr.h"
 
 #include "cantera/kinetics/ImplicitSurfChem.h"
+#include "cantera/kinetics/ImplicitSurfChem_masstransfer.h"
 
 using namespace std;
 
@@ -35,6 +36,7 @@ InterfaceKinetics::InterfaceKinetics(thermo_t* thermo) :
     m_nrev(0),
     m_surf(0),
     m_integrator(0),
+    m_integrator_masstransfer(0),
     m_beta(0),
     m_ctrxn(0),
     m_ctrxn_ecdf(0),
@@ -68,6 +70,7 @@ InterfaceKinetics::InterfaceKinetics(thermo_t* thermo) :
 InterfaceKinetics::~InterfaceKinetics()
 {
     delete m_integrator;
+    delete m_integrator_masstransfer;
 }
 //====================================================================================================================
 //  Copy Constructor for the %InterfaceKinetics object.
@@ -82,6 +85,7 @@ InterfaceKinetics::InterfaceKinetics(const InterfaceKinetics& right) :
     m_nrev(0),
     m_surf(0),
     m_integrator(0),
+    m_integrator_masstransfer(0),
     m_beta(0),
     m_ctrxn(0),
     m_ctrxn_ecdf(0),
@@ -1330,6 +1334,21 @@ advanceCoverages(doublereal tstep)
     m_integrator->integrate(0.0, tstep);
     delete m_integrator;
     m_integrator = 0;
+}
+
+void InterfaceKinetics::
+advanceCoverages_masstransfer(doublereal tstep, doublereal h)
+{
+    if (m_integrator_masstransfer == 0) {
+        vector<InterfaceKinetics*> k;
+        k.push_back(this);
+        m_integrator_masstransfer = new ImplicitSurfChem_masstransfer(k);
+        m_integrator_masstransfer->set_masstransfer_coefficient(h);
+        m_integrator_masstransfer->initialize();
+    }
+    m_integrator_masstransfer->integrate(0.0, tstep);
+    delete m_integrator_masstransfer;
+    m_integrator_masstransfer = 0;
 }
 //================================================================================================
 // Solve for the pseudo steady-state of the surface problem

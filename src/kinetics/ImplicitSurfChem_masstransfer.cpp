@@ -6,7 +6,7 @@
  */
 // Copyright 2001  California Institute of Technology
 
-#include "cantera/kinetics/ImplicitSurfChem.h"
+#include "cantera/kinetics/ImplicitSurfChem_masstransfer.h"
 #include "cantera/numerics/Integrator.h"
 #include "cantera/kinetics/solveSP.h"
 
@@ -16,7 +16,7 @@ namespace Cantera
 {
 
 // Constructor
-ImplicitSurfChem::ImplicitSurfChem(vector<InterfaceKinetics*> k) :
+ImplicitSurfChem_masstransfer::ImplicitSurfChem_masstransfer(vector<InterfaceKinetics*> k) :
     FuncEval(),
     m_nsurf(0),
     m_nv(0),
@@ -36,7 +36,7 @@ ImplicitSurfChem::ImplicitSurfChem(vector<InterfaceKinetics*> k) :
 {
     m_nsurf = k.size();
     size_t ns, nsp;
-    size_t nt, ntmax = 0;
+    size_t  ntmax = 0;
     size_t kinSpIndex = 0;
     // Loop over the number of surface kinetics objects
     for (size_t n = 0; n < m_nsurf; n++) {
@@ -49,14 +49,14 @@ ImplicitSurfChem::ImplicitSurfChem(vector<InterfaceKinetics*> k) :
         m_surfindex.push_back(ns);
         m_surf.push_back((SurfPhase*)&k[n]->thermo(ns));
         nsp = m_surf.back()->nSpecies();
-        m_nsp.push_back(nsp);
-        m_nv += m_nsp.back();
-        nt = k[n]->nTotalSpecies();
-        if (nt > ntmax) {
-            ntmax = nt;
+        m_nsp_surf.push_back(nsp);
+        m_nsp_tot.push_back(k[n]->nTotalSpecies());
+        m_nv += m_nsp_tot.back();
+        if (m_nsp_tot.back() > ntmax) {
+            ntmax = m_nsp_tot.back();
         }
         m_specStartIndex.push_back(kinSpIndex);
-        kinSpIndex += nsp;
+        kinSpIndex += m_nsp_tot.back();
 
         size_t nPhases = kinPtr->nPhases();
         vector_int pLocTmp(nPhases);
@@ -64,6 +64,9 @@ ImplicitSurfChem::ImplicitSurfChem(vector<InterfaceKinetics*> k) :
         for (size_t ip = 0; ip < nPhases; ip++) {
             if (ip != ns) {
                 ThermoPhase* thPtr = & kinPtr->thermo(ip);
+                 
+                m_bulk_massfraction.push_back(new double[thPtr->nSpecies()]);
+                thPtr->getMassFractions(m_bulk_massfraction.back());
                 if ((imatch = checkMatch(m_bulkPhases, thPtr)) == npos) {
                     m_bulkPhases.push_back(thPtr);
                     m_numBulkPhases++;
@@ -87,7 +90,6 @@ ImplicitSurfChem::ImplicitSurfChem(vector<InterfaceKinetics*> k) :
     m_integ = newIntegrator("CVODE");
 
 
-
     // use backward differencing, with a full Jacobian computed
     // numerically, and use a Newton linear iterator
 
@@ -97,7 +99,7 @@ ImplicitSurfChem::ImplicitSurfChem(vector<InterfaceKinetics*> k) :
     m_work.resize(ntmax);
 }
 
-int ImplicitSurfChem::checkMatch(std::vector<ThermoPhase*> m_vec, ThermoPhase* thPtr)
+int ImplicitSurfChem_masstransfer::checkMatch(std::vector<ThermoPhase*> m_vec, ThermoPhase* thPtr)
 {
     int retn = -1;
     for (int i = 0; i < (int) m_vec.size(); i++) {
@@ -112,7 +114,7 @@ int ImplicitSurfChem::checkMatch(std::vector<ThermoPhase*> m_vec, ThermoPhase* t
 /*
  * Destructor. Deletes the integrator.
  */
-ImplicitSurfChem::~ImplicitSurfChem()
+ImplicitSurfChem_masstransfer::~ImplicitSurfChem_masstransfer()
 {
     delete m_integ;
     delete m_surfSolver;
@@ -120,13 +122,14 @@ ImplicitSurfChem::~ImplicitSurfChem()
 
 // overloaded method of FuncEval. Called by the integrator to
 // get the initial conditions.
-void ImplicitSurfChem::getInitialConditions(doublereal t0, size_t lenc,
+void ImplicitSurfChem_masstransfer::getInitialConditions(doublereal t0, size_t lenc,
         doublereal* c)
 {
     size_t loc = 0;
     for (size_t n = 0; n < m_nsurf; n++) {
         m_surf[n]->getCoverages(c + loc);
-        loc += m_nsp[n];
+        m_bulkPhases[n]->getMassFractions(c + loc + m_nsp_surf[n]);
+        loc += m_nsp_tot[n];
     }
 }
 
@@ -134,10 +137,18 @@ void ImplicitSurfChem::getInitialConditions(doublereal t0, size_t lenc,
 /*
  *  Must be called before calling method 'advance'
  */
-void ImplicitSurfChem::initialize(doublereal t0)
+void ImplicitSurfChem_masstransfer::initialize(doublereal t0)
 {
     m_integ->setTolerances(m_rtol, m_atol);
     m_integ->initialize(t0, *this);
+}
+
+/*
+ *  Set masstransfer coefficient
+ */
+void ImplicitSurfChem_masstransfer::set_masstransfer_coefficient(doublereal h)
+{
+    m_masstransfer_coefficient = h;
 }
 
 // Integrate from t0 to t1. The integrator is reinitialized first.
@@ -148,7 +159,7 @@ void ImplicitSurfChem::initialize(doublereal t0)
  *  @param t0  Initial Time -> this is an input
  *  @param t1  Final Time -> This is an input
  */
-void ImplicitSurfChem::integrate(doublereal t0, doublereal t1)
+void ImplicitSurfChem_masstransfer::integrate(doublereal t0, doublereal t1)
 {
     m_integ->initialize(t0, *this);
     m_integ->setMaxStepSize(t1 - t0);
@@ -165,25 +176,30 @@ void ImplicitSurfChem::integrate(doublereal t0, doublereal t1)
  *  @param t0  Initial Time -> this is an input
  *  @param t1  Final Time -> This is an input
  */
-void ImplicitSurfChem::integrate0(doublereal t0, doublereal t1)
+void ImplicitSurfChem_masstransfer::integrate0(doublereal t0, doublereal t1)
 {
     m_integ->integrate(t1);
     updateState(m_integ->solution());
 }
 
-void ImplicitSurfChem::updateState(doublereal* c)
+void ImplicitSurfChem_masstransfer::updateState(doublereal* vecConcSpecies)
 {
-    size_t loc = 0;
-    for (size_t n = 0; n < m_nsurf; n++) {
-        m_surf[n]->setCoverages(c + loc);
-        loc += m_nsp[n];
+    size_t kstart;
+    for (size_t ip = 0; ip < m_nsurf; ip++) {
+        kstart = m_specStartIndex[ip];
+        m_surf[ip]->setCoverages(vecConcSpecies + kstart);
+
+        ThermoPhase* TP_ptr_bulk = m_bulkPhases[ip];
+        kstart = kstart+m_nsp_surf[ip];
+        TP_ptr_bulk->setMassFractions(vecConcSpecies + kstart);
     }
+
 }
 
 /*
  * Called by the integrator to evaluate ydot given y at time 'time'.
  */
-void ImplicitSurfChem::eval(doublereal time, doublereal* y,
+void ImplicitSurfChem_masstransfer::eval(doublereal time, doublereal* y,
                             doublereal* ydot, doublereal* p)
 {
     updateState(y);   // synchronize the surface state(s) with y
@@ -195,118 +211,21 @@ void ImplicitSurfChem::eval(doublereal time, doublereal* y,
         kstart = m_vecKinPtrs[n]->kineticsSpeciesIndex(0,m_surfindex[n]);
         sum = 0.0;
         loc = 0;
-        for (size_t k = 1; k < m_nsp[n]; k++) {
+        for (size_t k = 1; k < m_nsp_surf[n]; k++) {
             ydot[k + loc] = m_work[kstart + k] * rs0 * m_surf[n]->size(k);
             sum -= ydot[k];
         }
         ydot[loc] = sum;
-        loc += m_nsp[n];
+
+        for (size_t k = 0; k < (m_nsp_tot[n]-m_nsp_surf[n]); k++) {
+            ydot[k + m_nsp_surf[n] +  loc] = m_work[k] * m_bulkPhases[n]->molecularWeight(k)
+                          / m_bulkPhases[n]->density() 
+                         - m_masstransfer_coefficient * (y[k+m_nsp_surf[n]] - 
+                                                         m_bulk_massfraction[n][k]) ;
+        }
+        loc += m_nsp_tot[n];
     }
 }
-
-// Solve for the pseudo steady-state of the surface problem
-/*
- * Solve for the steady state of the surface problem.
- * This is the same thing as the advanceCoverages() function,
- * but at infinite times.
- *
- * Note, a direct solve is carried out under the hood here,
- * to reduce the computational time.
- */
-void ImplicitSurfChem::solvePseudoSteadyStateProblem(int ifuncOverride,
-        doublereal timeScaleOverride)
-{
-
-    int ifunc;
-    /*
-     * set bulkFunc
-     *    -> We assume that the bulk concentrations are constant.
-     */
-    int bulkFunc = BULK_ETCH;
-    /*
-     * time scale - time over which to integrate equations
-     */
-    doublereal time_scale = timeScaleOverride;
-    if (!m_surfSolver) {
-        m_surfSolver = new solveSP(this, bulkFunc);
-        /*
-         * set ifunc, which sets the algorithm.
-         */
-        ifunc = SFLUX_INITIALIZE;
-    } else {
-        ifunc = SFLUX_RESIDUAL;
-    }
-
-    // Possibly override the ifunc value
-    if (ifuncOverride >= 0) {
-        ifunc = ifuncOverride;
-    }
-
-    /*
-     * Get the specifications for the problem from the values
-     * in the ThermoPhase objects for all phases.
-     *
-     *  1) concentrations of all species in all phases, m_concSpecies[]
-     *  2) Temperature and pressure
-     */
-    getConcSpecies(DATA_PTR(m_concSpecies));
-    InterfaceKinetics* ik = m_vecKinPtrs[0];
-    ThermoPhase& tp = ik->thermo(0);
-    doublereal TKelvin = tp.temperature();
-    doublereal PGas  = tp.pressure();
-    /*
-     * Make sure that there is a common temperature and
-     * pressure for all ThermoPhase objects belonging to the
-     * interfacial kinetics object, if it is required by
-     * the problem statement.
-     */
-    if (m_commonTempPressForPhases) {
-        setCommonState_TP(TKelvin, PGas);
-    }
-
-    doublereal reltol = 1.0E-6;
-    doublereal atol = 1.0E-20;
-
-    /*
-     * Install a filter for negative concentrations. One of the
-     * few ways solveSS can fail is if concentrations on input
-     * are below zero.
-     */
-    bool rset = false;
-    for (size_t k = 0; k < m_nv; k++) {
-        if (m_concSpecies[k] < 0.0) {
-            rset = true;
-            m_concSpecies[k] = 0.0;
-        }
-    }
-    if (rset) {
-        setConcSpecies(DATA_PTR(m_concSpecies));
-    }
-
-    m_surfSolver->m_ioflag = m_ioFlag;
-
-    // Save the current solution
-    copy(m_concSpecies.begin(), m_concSpecies.end(), m_concSpeciesSave.begin());
-
-
-    int retn = m_surfSolver->solveSurfProb(ifunc, time_scale, TKelvin, PGas,
-                                           reltol, atol);
-    if (retn != 1) {
-        // reset the concentrations
-        copy(m_concSpeciesSave.begin(), m_concSpeciesSave.end(), m_concSpecies.begin());
-        setConcSpecies(DATA_PTR(m_concSpeciesSave));
-        ifunc = SFLUX_INITIALIZE;
-        retn = m_surfSolver->solveSurfProb(ifunc, time_scale, TKelvin, PGas,
-                                           reltol, atol);
-
-        if (retn != 1) {
-            throw CanteraError("ImplicitSurfChem::solvePseudoSteadyStateProblem",
-                               "solveSP return an error condition!");
-        }
-    }
-}
-
-
 
 /*
  * getConcSpecies():
@@ -317,7 +236,7 @@ void ImplicitSurfChem::solvePseudoSteadyStateProblem(int ifuncOverride,
  *
  * m_concSpecies[]
  */
-void ImplicitSurfChem::getConcSpecies(doublereal* const vecConcSpecies) const
+void ImplicitSurfChem_masstransfer::getConcSpecies(doublereal* const vecConcSpecies) const
 {
     size_t kstart;
     for (size_t ip = 0; ip < m_nsurf; ip++) {
@@ -325,7 +244,6 @@ void ImplicitSurfChem::getConcSpecies(doublereal* const vecConcSpecies) const
         kstart = m_specStartIndex[ip];
         TP_ptr->getConcentrations(vecConcSpecies + kstart);
     }
-    kstart = m_nv;
     for (size_t ip = 0; ip <  m_numBulkPhases; ip++) {
         ThermoPhase* TP_ptr = m_bulkPhases[ip];
         TP_ptr->getConcentrations(vecConcSpecies + kstart);
@@ -342,7 +260,7 @@ void ImplicitSurfChem::getConcSpecies(doublereal* const vecConcSpecies) const
  *
  * m_concSpecies[]
  */
-void ImplicitSurfChem::setConcSpecies(const doublereal* const vecConcSpecies)
+void ImplicitSurfChem_masstransfer::setConcSpecies(const doublereal* const vecConcSpecies)
 {
     size_t kstart;
     for (size_t ip = 0; ip < m_nsurf; ip++) {
@@ -367,7 +285,7 @@ void ImplicitSurfChem::setConcSpecies(const doublereal* const vecConcSpecies)
  *  Units Temperature = Kelvin
  *        Pressure    = Pascal
  */
-void ImplicitSurfChem::
+void ImplicitSurfChem_masstransfer::
 setCommonState_TP(doublereal TKelvin, doublereal PresPa)
 {
     for (size_t ip = 0; ip < m_nsurf; ip++) {

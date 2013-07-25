@@ -29,6 +29,7 @@ class ReactionData;
 class ThermoPhase;
 class SurfPhase;
 class ImplicitSurfChem;
+class ImplicitSurfChem_masstransfer;
 
 //!  A kinetics manager for heterogeneous reaction mechanisms. The
 //!  reactions are assumed to occur at a 2D interface between two 3D phases.
@@ -464,6 +465,8 @@ public:
      */
     void advanceCoverages(doublereal tstep);
 
+    void advanceCoverages_masstransfer(doublereal tstep, doublereal h);
+
     //! Solve for the pseudo steady-state of the surface problem
     /*!
      * Solve for the steady state of the surface problem.
@@ -742,6 +745,7 @@ protected:
      * from other surface phases.
      */
     ImplicitSurfChem* m_integrator;
+    ImplicitSurfChem_masstransfer* m_integrator_masstransfer;
 
     vector_fp m_beta;
 
