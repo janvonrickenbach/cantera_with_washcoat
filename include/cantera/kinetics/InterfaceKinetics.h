@@ -18,6 +18,8 @@
 #include "RateCoeffMgr.h"
 #include "ReactionStoichMgr.h"
 
+#include "cantera/transport/MixTransport.h"
+
 #include <cmath>
 #include <cstdlib>
 
@@ -465,7 +467,7 @@ public:
      */
     void advanceCoverages(doublereal tstep);
 
-    void advanceCoverages_masstransfer(doublereal tstep, doublereal h);
+    void advanceCoverages_masstransfer(Transport* t,doublereal tstep, doublereal h);
 
     //! Solve for the pseudo steady-state of the surface problem
     /*!

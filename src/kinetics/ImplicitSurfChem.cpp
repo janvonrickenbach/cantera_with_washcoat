@@ -87,7 +87,6 @@ ImplicitSurfChem::ImplicitSurfChem(vector<InterfaceKinetics*> k) :
     m_integ = newIntegrator("CVODE");
 
 
-
     // use backward differencing, with a full Jacobian computed
     // numerically, and use a Newton linear iterator
 
@@ -325,7 +324,6 @@ void ImplicitSurfChem::getConcSpecies(doublereal* const vecConcSpecies) const
         kstart = m_specStartIndex[ip];
         TP_ptr->getConcentrations(vecConcSpecies + kstart);
     }
-    kstart = m_nv;
     for (size_t ip = 0; ip <  m_numBulkPhases; ip++) {
         ThermoPhase* TP_ptr = m_bulkPhases[ip];
         TP_ptr->getConcentrations(vecConcSpecies + kstart);

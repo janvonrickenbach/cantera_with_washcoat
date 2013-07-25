@@ -1,5 +1,5 @@
 /**
- *  @file ImplicitSurfChem.h
+ *  @file ImplicitSurfChem_masstransfer.h
  * Declarations for the implicit integration of surface site density equations
  *  (see \ref  kineticsmgr and class
  *  \link Cantera::ImplicitSurfChem ImplicitSurfChem\endlink).
@@ -86,6 +86,7 @@ public:
     virtual void initialize(doublereal t0 = 0.0);
 
     virtual void set_masstransfer_coefficient(doublereal h);
+    virtual void set_transport(Transport* t);
 
 
     //! Integrate from t0 to t1. The integrator is reinitialized first.
@@ -217,6 +218,9 @@ protected:
     std::vector<ThermoPhase*> m_bulkPhases;
 
     std::vector<double*> m_bulk_massfraction;
+    double* m_diff_coeffs;
+
+    Transport* m_transport;
 
 
     //! vector of pointers to InterfaceKinetics objects

@@ -66,6 +66,7 @@ ImplicitSurfChem_masstransfer::ImplicitSurfChem_masstransfer(vector<InterfaceKin
                 ThermoPhase* thPtr = & kinPtr->thermo(ip);
                  
                 m_bulk_massfraction.push_back(new double[thPtr->nSpecies()]);
+                m_diff_coeffs.push_back(new double[thPtr->nSpecies()]);
                 thPtr->getMassFractions(m_bulk_massfraction.back());
                 if ((imatch = checkMatch(m_bulkPhases, thPtr)) == npos) {
                     m_bulkPhases.push_back(thPtr);
@@ -151,6 +152,11 @@ void ImplicitSurfChem_masstransfer::set_masstransfer_coefficient(doublereal h)
     m_masstransfer_coefficient = h;
 }
 
+void ImplicitSurfChem_masstransfer::set_transport(Transport* t)
+{
+    m_transport = t;
+}
+
 // Integrate from t0 to t1. The integrator is reinitialized first.
 /*
  *   This routine does a time accurate solve from t = t0 to t = t1.
@@ -217,10 +223,12 @@ void ImplicitSurfChem_masstransfer::eval(doublereal time, doublereal* y,
         }
         ydot[loc] = sum;
 
+        m_transport->getMixDiffCoeffs(m_diff_coeffs);
         for (size_t k = 0; k < (m_nsp_tot[n]-m_nsp_surf[n]); k++) {
             ydot[k + m_nsp_surf[n] +  loc] = m_work[k] * m_bulkPhases[n]->molecularWeight(k)
                           / m_bulkPhases[n]->density() 
-                         - m_masstransfer_coefficient * (y[k+m_nsp_surf[n]] - 
+                         - m_masstransfer_coefficient * m_diff_coeffs[k]
+                                                      * (y[k+m_nsp_surf[n]] - 
                                                          m_bulk_massfraction[n][k]) ;
         }
         loc += m_nsp_tot[n];

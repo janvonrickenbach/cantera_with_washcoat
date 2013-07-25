@@ -15,6 +15,7 @@
 #include "cantera/kinetics/ImplicitSurfChem.h"
 #include "cantera/kinetics/ImplicitSurfChem_masstransfer.h"
 
+
 using namespace std;
 
 namespace Cantera
@@ -1337,13 +1338,14 @@ advanceCoverages(doublereal tstep)
 }
 
 void InterfaceKinetics::
-advanceCoverages_masstransfer(doublereal tstep, doublereal h)
+advanceCoverages_masstransfer(Transport* t,doublereal tstep, doublereal h)
 {
     if (m_integrator_masstransfer == 0) {
         vector<InterfaceKinetics*> k;
         k.push_back(this);
         m_integrator_masstransfer = new ImplicitSurfChem_masstransfer(k);
         m_integrator_masstransfer->set_masstransfer_coefficient(h);
+        m_integrator_masstransfer->set_transport(t);
         m_integrator_masstransfer->initialize();
     }
     m_integrator_masstransfer->integrate(0.0, tstep);
