@@ -218,7 +218,7 @@ protected:
     std::vector<ThermoPhase*> m_bulkPhases;
 
     std::vector<double*> m_bulk_massfraction;
-    double* m_diff_coeffs;
+    std::vector<double*> m_diff_coeffs;
 
     Transport* m_transport;
 

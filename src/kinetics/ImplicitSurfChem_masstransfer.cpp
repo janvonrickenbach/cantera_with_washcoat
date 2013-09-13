@@ -223,11 +223,11 @@ void ImplicitSurfChem_masstransfer::eval(doublereal time, doublereal* y,
         }
         ydot[loc] = sum;
 
-        m_transport->getMixDiffCoeffs(m_diff_coeffs);
+        m_transport->getMixDiffCoeffs(m_diff_coeffs.at(n));
         for (size_t k = 0; k < (m_nsp_tot[n]-m_nsp_surf[n]); k++) {
             ydot[k + m_nsp_surf[n] +  loc] = m_work[k] * m_bulkPhases[n]->molecularWeight(k)
                           / m_bulkPhases[n]->density() 
-                         - m_masstransfer_coefficient * m_diff_coeffs[k]
+                         - m_masstransfer_coefficient * m_diff_coeffs.at(n)[k]
                                                       * (y[k+m_nsp_surf[n]] - 
                                                          m_bulk_massfraction[n][k]) ;
         }
