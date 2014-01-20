@@ -211,6 +211,7 @@ void ImplicitSurfChem_masstransfer::eval(doublereal time, doublereal* y,
     updateState(y);   // synchronize the surface state(s) with y
     doublereal rs0, sum;
     size_t loc, kstart;
+    double Sc;
     for (size_t n = 0; n < m_nsurf; n++) {
         rs0 = 1.0/m_surf[n]->siteDensity();
         m_vecKinPtrs[n]->getNetProductionRates(DATA_PTR(m_work));
@@ -225,9 +226,11 @@ void ImplicitSurfChem_masstransfer::eval(doublereal time, doublereal* y,
 
         m_transport->getMixDiffCoeffs(m_diff_coeffs.at(n));
         for (size_t k = 0; k < (m_nsp_tot[n]-m_nsp_surf[n]); k++) {
+            Sc = m_transport->viscosity() /m_bulkPhases[n]->density() / m_diff_coeffs.at(n)[k];
             ydot[k + m_nsp_surf[n] +  loc] = m_work[k] * m_bulkPhases[n]->molecularWeight(k)
                           / m_bulkPhases[n]->density() 
-                         - m_masstransfer_coefficient * m_diff_coeffs.at(n)[k]
+                         - m_masstransfer_coefficient * pow(Sc,1.0/3.0)
+                                                      * m_diff_coeffs.at(n)[k]
                                                       * (y[k+m_nsp_surf[n]] - 
                                                          m_bulk_massfraction[n][k]) ;
         }
