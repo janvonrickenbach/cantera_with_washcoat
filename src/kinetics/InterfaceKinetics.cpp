@@ -14,6 +14,7 @@
 
 #include "cantera/kinetics/ImplicitSurfChem.h"
 #include "cantera/kinetics/ImplicitSurfChem_masstransfer.h"
+#include "cantera/kinetics/ImplicitSurfChem_wc.h"
 
 
 using namespace std;
@@ -1351,6 +1352,18 @@ advanceCoverages_masstransfer(Transport* t,doublereal tstep, doublereal h)
     m_integrator_masstransfer->integrate(0.0, tstep);
     delete m_integrator_masstransfer;
     m_integrator_masstransfer = 0;
+}
+
+void InterfaceKinetics::advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h)
+{
+    if (m_integrator_wc == 0) {
+        m_integrator_wc = new ImplicitSurfChem_wc(this);
+        m_integrator_wc->set_transport(t);
+        m_integrator_wc->initialize();
+    }
+    m_integrator_wc->integrate(0.0, tstep);
+    delete m_integrator_wc;
+    m_integrator_wc = 0;
 }
 //================================================================================================
 // Solve for the pseudo steady-state of the surface problem

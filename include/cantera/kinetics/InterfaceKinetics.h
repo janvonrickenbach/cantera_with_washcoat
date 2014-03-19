@@ -32,6 +32,7 @@ class ThermoPhase;
 class SurfPhase;
 class ImplicitSurfChem;
 class ImplicitSurfChem_masstransfer;
+class ImplicitSurfChem_wc;
 
 //!  A kinetics manager for heterogeneous reaction mechanisms. The
 //!  reactions are assumed to occur at a 2D interface between two 3D phases.
@@ -495,6 +496,34 @@ public:
      *             time used in the initial transient algorithm,
      *             before the equation system is solved directly.
      */
+    void advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h);
+
+    //! Solve for the pseudo steady-state of the surface problem
+    /*!
+     * Solve for the steady state of the surface problem.
+     * This is the same thing as the advanceCoverages() function,
+     * but at infinite times.
+     *
+     * Note, a direct solve is carried out under the hood here,
+     * to reduce the computational time.
+     *
+     * @param ifuncOverride 4 values are possible
+     *                    1  SFLUX_INITIALIZE
+     *                    2  SFLUX_RESIDUAL
+     *                    3  SFLUX_JACOBIAN
+     *                    4  SFLUX_TRANSIENT
+     *         The default is -1, which means that the program
+     *         will decide.
+     * @param timeScaleOverride When a pseudo transient is
+     *             selected this value can be used to override
+     *             the default time scale for integration which
+     *             is one.
+     *             When SFLUX_TRANSIENT is used, this is equal to the
+     *             time over which the equations are integrated.
+     *             When SFLUX_INITIALIZE is used, this is equal to the
+     *             time used in the initial transient algorithm,
+     *             before the equation system is solved directly.
+     */
     void solvePseudoSteadyStateProblem(int ifuncOverride = -1,
                                        doublereal timeScaleOverride = 1.0);
 
@@ -748,6 +777,7 @@ protected:
      */
     ImplicitSurfChem* m_integrator;
     ImplicitSurfChem_masstransfer* m_integrator_masstransfer;
+    ImplicitSurfChem_wc* m_integrator_wc;
 
     vector_fp m_beta;
 

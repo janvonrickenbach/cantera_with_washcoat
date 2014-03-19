@@ -34,3 +34,6 @@ config.log
 *.gcno
 coverage/
 coverage.info
+/SConfig.py
+/SConscript
+/SConstruct
