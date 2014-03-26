@@ -11,15 +11,19 @@
 
 #include "cantera/numerics/FuncEval.h"
 #include "cantera/numerics/Integrator.h"
-#include "cantera/kinetics/InterfaceKinetics.h"
-#include "cantera/thermo/SurfPhase.h"
-#include "solveSP.h"
+//#include "cantera/kinetics/InterfaceKinetics.h"
+//#include "cantera/thermo/SurfPhase.h"
+//#include "solveSP.h"
 #include <vector>
 
 namespace Cantera
 {
 
 class solveSP;
+class InterfaceKinetics;
+class SurfPhase;
+class Transport;
+class ThermoPhase;
 
 
 //! Advances the surface coverages of the associated set of SurfacePhase
@@ -73,7 +77,8 @@ public:
      *           internal degrees of freedom representing the concentration
      *           of surface adsorbates.
      */
-    ImplicitSurfChem_wc(InterfaceKinetics* k);
+    ImplicitSurfChem_wc(InterfaceKinetics* k,Transport* t,double h,double wc_thickness,
+    		            int nx,double area_to_volume);
 
     /**
      * Destructor. Deletes the integrator.
@@ -87,7 +92,6 @@ public:
     virtual void initialize(doublereal t0 = 0.0);
 
     virtual void set_wc_coefficient(doublereal h);
-    virtual void set_transport(Transport* t);
 
 
     //! Integrate from t0 to t1. The integrator is reinitialized first.
@@ -125,6 +129,7 @@ public:
     virtual void eval(doublereal t, doublereal* y, doublereal* ydot,
                       doublereal* p);
 
+	void printGrid();
 
 protected:
 
@@ -146,8 +151,17 @@ protected:
     typedef std::vector<std::vector<double> > comp_vector;
     typedef std::vector<double> grid_vector;
 
-    std::vector<double> m_bulk_massfraction;
-    grid_vector m_fluxes;
+    std::vector<doublereal> m_bulk_massfraction;
+    std::vector<doublereal> m_bulk_diff_coeffs;
+    doublereal m_bulk_density;
+    doublereal m_bulk_temperature;
+    doublereal m_bulk_pressure;
+
+    comp_vector m_fluxes;
+
+    std::vector<doublereal> m_temp_vol_massfraction;
+    std::vector<doublereal> m_temp_surf_massfraction;
+    std::vector<doublereal> m_temp_production_rates;
 
     grid_vector m_x_co;
     grid_vector m_x;
@@ -155,13 +169,15 @@ protected:
     grid_vector m_fx;
 
     double m_wc_thickness;
+    double m_area_to_volume;
 
-    comp_vector m_rho;
-    comp_vector m_diffusion_coeffs;
+    grid_vector m_rho;
+    comp_vector m_diff_coeffs;
 
     Transport* m_transport;
-    ThermoPhase* gas_phase;
-    SurfPhase* surface_phase;
+    ThermoPhase* m_gas_phase;
+    SurfPhase* m_surface_phase;
+    InterfaceKinetics* m_kin;
 
     //! Pointer to the cvode integrator
     Integrator* m_integ;
@@ -169,28 +185,30 @@ protected:
     doublereal m_maxstep;        // max step size
 
     int m_nx;
+    int m_nco;
+    int m_nx_var;
     int m_vol_sp;
     int m_surf_sp;
 
     doublereal m_wc_coefficient;
 
-
     int m_nvars;
     enum vars_enum{en_temperature,en_end};
 
-	doublereal getStateVar(vars_enum var,int loc_idx);
-	void setStateVar(double value,vars_enum var,int loc_idx);
+	doublereal getStateVar(double* state,vars_enum var,int loc_idx);
+	void setStateVar(double* state,double value,vars_enum var,int loc_idx);
 	void createGrid();
 
-	void printGrid();
+
 
     std::vector<vars_enum> en_vol_comp;
     std::vector<vars_enum> en_surf_comp;
 
-    vector_fp m_state;
-
 void getInitialConditions(doublereal t0, size_t lenc,doublereal* c);
+void update_fluxes(double* state);
+double interpolate_values(double fxp,double val,double valw);
 
+void write_var(std::ofstream& myfile,const std::vector<double>& vec);
 size_t neq() {return m_nvars*m_nx;}
 
 
@@ -200,6 +218,7 @@ private:
     //! and underlying routines.
     int m_ioFlag;
 };
+
 }
 
 #endif

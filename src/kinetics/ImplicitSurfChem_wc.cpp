@@ -16,19 +16,27 @@
 
 namespace Cantera{
 // Constructor
-ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k) :
+ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k, Transport* t,double h,double wc_thickness,
+		                                 int nx,double area_to_volume) :
     FuncEval(),
     m_integ(0),
     m_atol(1.e-25),
     m_rtol(1.e-7),
-    m_maxstep(0.0)
+    m_maxstep(0.0),
+    m_transport(t),
+    m_wc_coefficient(h),
+    m_wc_thickness(wc_thickness),
+	m_nx(nx),
+    m_kin(k),
+    m_area_to_volume(area_to_volume)
+
 
 {
 
-	m_wc_thickness = 1E-5;
+    m_nco    = m_nx+1;
+	m_nx_var = m_nx+2;
 
 	createGrid();
-	printGrid();
 
     m_integ = newIntegrator("CVODE");
 
@@ -39,23 +47,39 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k) :
     m_integ->setMethod(BDF_Method);
     m_integ->setProblemType(DENSE + NOJAC);
     m_integ->setIterator(Newton_Iter);
-    m_state.resize(0);
 
     if (k->nPhases() > 2){
     	std::cout << "Error more than two phases" << std::endl;
     }
 
-    surface_phase = (SurfPhase* )&k->thermo(k->surfacePhaseIndex());
+    // Identify gas phase and store pointer in member
+    m_surface_phase = (SurfPhase* )&k->thermo(k->surfacePhaseIndex());
     for (int phase_idx=0;phase_idx< k->nPhases();++phase_idx){
-      if (phase_idx /= k->surfacePhaseIndex()){
-        gas_phase    = &k->thermo(phase_idx);
+      if (phase_idx != k->surfacePhaseIndex()){
+        m_gas_phase    = &k->thermo(phase_idx);
       }
     }
 
-    m_vol_sp  = gas_phase->nSpecies();
+    // Get number of species
+    m_vol_sp  = m_gas_phase->nSpecies();
     m_surf_sp = k->nTotalSpecies() - m_vol_sp;
 
+    m_temp_vol_massfraction.resize(m_vol_sp);
+    m_temp_surf_massfraction.resize(m_surf_sp);
+    m_temp_production_rates.resize(m_surf_sp+m_vol_sp);
 
+	// Get the bulk values
+	m_bulk_massfraction.resize(m_vol_sp);
+	m_bulk_diff_coeffs.resize(m_vol_sp);
+
+	m_gas_phase->getMassFractions(&m_bulk_massfraction.front());
+	m_bulk_temperature = m_gas_phase->temperature();
+	m_bulk_pressure    = m_gas_phase->pressure();
+	m_bulk_density     = m_gas_phase->density();
+	m_transport->getMixDiffCoeffs(&m_bulk_diff_coeffs.front());
+
+
+    // Initialize enumerations
     for (int comp_idx=0;comp_idx < m_vol_sp;++comp_idx){
     	vars_enum temp = static_cast<vars_enum>(en_end+comp_idx);
     	en_vol_comp.push_back(temp);
@@ -66,25 +90,37 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k) :
     	en_surf_comp.push_back(temp);
     }
 
-    m_bulk_massfraction.resize(m_vol_sp);
-    m_fluxes.resize(m_nx+1);
-
-    m_rho.resize(m_nx);
-    m_diffusion_coeffs.resize(m_vol_sp);
-
-    m_x.resize(m_nx);
-    m_dx.resize(m_nx);
-    m_x_co.resize(m_nx+1);
-
     comp_vector::iterator comp_iter;
+    // Initialize arrays
+    m_bulk_massfraction.resize(m_vol_sp);
+    m_fluxes.resize(m_vol_sp);
 
-    for (comp_iter =  m_diffusion_coeffs.begin();
-    	 comp_iter != m_diffusion_coeffs.end();
+    for (comp_iter =  m_fluxes.begin();
+    	 comp_iter != m_fluxes.end();
     	 ++comp_iter){
-    	comp_iter->resize(m_nx);
+    	comp_iter->resize(m_nco);
+    }
+
+    m_rho.resize(m_nx_var);
+    m_diff_coeffs.resize(m_nx_var);
+
+
+    for (comp_iter =  m_diff_coeffs.begin();
+    	 comp_iter != m_diff_coeffs.end();
+    	 ++comp_iter){
+    	comp_iter->resize(m_vol_sp);
     }
 
     m_nvars = 1+m_surf_sp + m_vol_sp;
+
+    for (int loc_idx=0;loc_idx<m_nx_var;++loc_idx){
+      m_rho[loc_idx] = m_bulk_density;
+	  for (int nc=0;nc<m_vol_sp;++nc){
+	    m_diff_coeffs[loc_idx][nc] = m_bulk_diff_coeffs[nc];
+	  }
+	}
+
+
 }
 
 
@@ -114,10 +150,6 @@ void ImplicitSurfChem_wc::set_wc_coefficient(doublereal h)
     m_wc_coefficient = h;
 }
 
-void ImplicitSurfChem_wc::set_transport(Transport* t)
-{
-    m_transport = t;
-}
 
 // Integrate from t0 to t1. The integrator is reinitialized first.
 /*
@@ -155,20 +187,59 @@ void ImplicitSurfChem_wc::integrate0(doublereal t0, doublereal t1)
 void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
                             doublereal* ydot, doublereal* p)
 {
+	double source = 0.0;
+	update_fluxes(y);
+	double dx;
+
+
+    for (int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+      dx = m_x[g_idx_p+2] - m_x[g_idx_p+1];
+
+	  for (int nc =0;nc<m_vol_sp;++nc){
+		m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],g_idx_p);
+	  }
+	  for (int nc =0;nc<m_surf_sp;++nc){
+		m_temp_surf_massfraction[nc] = getStateVar(y,en_surf_comp[nc],g_idx_p);
+	  }
+
+	  m_gas_phase->setMassFractions(&m_temp_vol_massfraction.front());
+	  m_surface_phase->setMassFractions(&m_temp_surf_massfraction.front());
+	  m_kin->getNetProductionRates(&m_temp_production_rates.front());
+
+	  for (int nc =0;nc<m_vol_sp;++nc){
+	     source = 0.0;
+	     source = m_fluxes[nc][g_idx_p] - m_fluxes[nc][g_idx_p+1];
+	     source = source + m_temp_production_rates[nc] * dx
+	    		         * m_gas_phase->molecularWeight(nc)
+	    		         * m_area_to_volume;
+  	     setStateVar(ydot,source,en_vol_comp[nc],g_idx_p);
+	  }
+	  for (int nc =0;nc<m_surf_sp;++nc){
+  	     source = 0.0;
+	     source = source *m_temp_production_rates[nc+m_vol_sp];
+
+  	     setStateVar(ydot,source,en_surf_comp[nc],g_idx_p);
+	  }
+	}
+
 }
 
 
 
-doublereal ImplicitSurfChem_wc::getStateVar(vars_enum var,int loc_idx){
-	return m_state[loc_idx*m_nvars+var];
+void       ImplicitSurfChem_wc::setStateVar(double* state,double value,vars_enum var,int loc_idx){
+	state[loc_idx*m_nvars+var] = value;
+}doublereal ImplicitSurfChem_wc::getStateVar(double* state,vars_enum var,int loc_idx){
+	return state[loc_idx*m_nvars+var];
 
-}
-void       ImplicitSurfChem_wc::setStateVar(double value,vars_enum var,int loc_idx){
-	m_state[loc_idx*m_nvars+var] = value;
 }
 
 void ImplicitSurfChem_wc::createGrid(){
 	//compute dx in every cell
+    m_x.resize(m_nx);
+    m_dx.resize(m_nx);
+    m_x_co.resize(m_nco-1);
+    m_fx.resize(m_nx_var);
+
 	grid_vector::iterator vec_it;
 	grid_vector::iterator vec_it_co;
 	grid_vector::iterator vec_it_dx;
@@ -180,14 +251,19 @@ void ImplicitSurfChem_wc::createGrid(){
 	}
 
 	//compute interpolation coeffcient in every cell
+
 	for(vec_it  = m_fx.begin();
 		vec_it != m_fx.end();
 		++vec_it){
 	   *vec_it = 0.5;
 	}
 
+	m_fx[0] = 1.0;
+	m_fx[m_nx_var] = 1.0;
+
 	// Get the corner values
 	std::partial_sum(m_dx.begin(),m_dx.end(),m_x_co.begin());
+	m_x_co.insert(m_x_co.begin(),0.0);
 
 	// Get the cell_center values
 	for(vec_it    = m_x.begin()
@@ -197,35 +273,128 @@ void ImplicitSurfChem_wc::createGrid(){
 		++vec_it,++vec_it_co,++vec_it_dx){
 	   *vec_it = *vec_it_co + 0.5 * (*vec_it_dx);
 	}
+	m_x.insert(m_x.begin(),0.0);
+	m_x.push_back(m_x_co.back());
 }
 
 void ImplicitSurfChem_wc::printGrid(){
 
 	std::ofstream myfile;
-	myfile.open ("grid.dat");
+	myfile.open("grid.dat");
 
-	grid_vector::iterator vec_it;
-	grid_vector::iterator vec_it_co;
-	grid_vector::iterator vec_it_dx;
+	std::vector<double> temp_vec;
 
-	for(vec_it    = m_x.begin()
-	   ,vec_it_co = m_x_co.begin()
-	   ,vec_it_dx = m_dx.begin();
-		vec_it != m_x.end();
-		++vec_it,++vec_it_co,++vec_it_dx){
-		myfile << *vec_it    << " "
-			   << *vec_it_co << " "
-			   << *vec_it_dx << std::endl;
+	temp_vec.clear();
+	temp_vec.push_back(m_x[0]);
+	for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+		temp_vec.push_back(m_x[g_idx_p+1]);
+	}
+
+	write_var(myfile,temp_vec);
+
+	for (int nc=0;nc<m_vol_sp;++nc){
+		temp_vec.clear();
+		temp_vec.push_back(m_bulk_massfraction[nc]);
+		for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+			temp_vec.push_back(getStateVar(m_integ->solution(),en_vol_comp[nc],g_idx_p));
+		}
+		write_var(myfile,temp_vec);
 	}
 
 	myfile.close();
 
 }
 
+void ImplicitSurfChem_wc::write_var(std::ofstream &myfile,const std::vector<double> & vec){
+
+	std::vector<double>::const_iterator vec_it;
+
+	for(vec_it    = vec.begin();
+		vec_it   != vec.end();
+		++vec_it){
+		myfile << *vec_it << " ";
+	}
+    myfile << std::endl;
+
+
+
+}
+
+double ImplicitSurfChem_wc::interpolate_values(double fxp,double valp,double valw){
+	return fxp * valp + (1-fxp) * valw;
+}
+
+void ImplicitSurfChem_wc::update_fluxes(double* state){
+
+	for(int nc=0;nc<m_vol_sp;++nc){
+		std::vector<double> prefactor;
+		prefactor.resize(m_nx_var);
+		int var_idx_p, var_idx_w;
+		int state_idx_p, state_idx_w;
+		int g_idx_p, g_idx_w;
+
+		// Compute rho * diff coeff for all the cells
+		for(g_idx_p=0; g_idx_p < m_nx_var; ++g_idx_p){
+			  prefactor[g_idx_p] =  m_rho[g_idx_p]
+								  * m_diff_coeffs[g_idx_p][nc];
+		}
+
+		// Compute west fluxes for all the cells
+		for(g_idx_w=1; g_idx_w < m_nx; ++g_idx_w){
+			state_idx_p = g_idx_w;
+			state_idx_w = g_idx_w-1;
+			var_idx_p = g_idx_w+1;
+			var_idx_w = g_idx_w;
+
+			//prefactor
+			m_fluxes[nc][g_idx_w] = interpolate_values(m_fx[var_idx_w]
+												,prefactor[var_idx_w],prefactor[var_idx_p]);
+
+			// Multiply with component gradient
+			m_fluxes[nc][g_idx_w] =  m_fluxes[nc][g_idx_w] *
+								(getStateVar(state,en_vol_comp[nc],state_idx_w) -
+								 getStateVar(state,en_vol_comp[nc],state_idx_p)) /
+								 (m_x[var_idx_p] - m_x[var_idx_w]);
+		}
+
+
+		//D_b*D_i*h*rho_b*rho_i*(-Y_1 + Y_b)/(D_b*dx*h*rho_b + D_i*rho_i)
+		// Apply the boundary condition for the first cell
+		double dx_inf = m_x[1] - m_x[0];
+		double prefactor_inf = interpolate_values(m_fx[0],prefactor[0],prefactor[1]);
+		double prefactor_bulk = m_bulk_diff_coeffs[nc] * m_bulk_density
+							  * m_wc_coefficient * dx_inf;
+		double prefactor_mix = prefactor_inf * m_bulk_density *m_wc_coefficient
+							  *m_bulk_diff_coeffs[nc];
+
+		double Y_1 = getStateVar(state,en_vol_comp[nc],0);
+		m_fluxes[nc][0] =(prefactor_mix *
+					 (m_bulk_massfraction[nc]- Y_1 ))/
+					(prefactor_bulk + prefactor_inf);
+
+		}
+}
+
 
 void ImplicitSurfChem_wc::getInitialConditions(doublereal t0, size_t lenc,
-        doublereal* c)
+        doublereal* y)
 {
+	for (int nc=0;nc<m_vol_sp;++nc){
+	   for(int g_idx_p=0;g_idx_p < m_nx; ++g_idx_p){
+		 setStateVar(y,m_bulk_massfraction[nc],en_vol_comp[nc],g_idx_p);
+	   }
+	}
+
+	for (int nc=0;nc<m_surf_sp;++nc){
+	   for(int g_idx_p=0;g_idx_p < m_nx; ++g_idx_p){
+		 if (nc==0) {
+		    setStateVar(y,1.0,en_surf_comp[nc],g_idx_p);
+		 }else{
+		    setStateVar(y,0.0,en_surf_comp[nc],g_idx_p);
+		 }
+
+	   }
+	}
 }
 
 }
