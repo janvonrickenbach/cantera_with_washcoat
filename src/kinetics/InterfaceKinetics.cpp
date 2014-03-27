@@ -1354,11 +1354,11 @@ advanceCoverages_masstransfer(Transport* t,doublereal tstep, doublereal h)
     m_integrator_masstransfer = 0;
 }
 
-void InterfaceKinetics::advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h,double wc_thickness
-		                                    ,int nx,double area_to_volume)
+void InterfaceKinetics::advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h,doublereal h_temp,double wc_thickness
+		                                    ,int nx,double area_to_volume, bool with_energy)
 {
     if (m_integrator_wc == 0) {
-        m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,wc_thickness,nx,area_to_volume);
+        m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,nx,area_to_volume,with_energy);
         m_integrator_wc->initialize();
     }
 

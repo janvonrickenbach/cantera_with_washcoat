@@ -496,8 +496,8 @@ public:
      *             time used in the initial transient algorithm,
      *             before the equation system is solved directly.
      */
-    void advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h,doublereal wc_thickness
-    		                ,int nx,double area_to_volume);
+    void advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h,doublereal h_temp,doublereal wc_thickness
+    		                ,int nx,double area_to_volume,bool with_energy);
 
     //! Solve for the pseudo steady-state of the surface problem
     /*!

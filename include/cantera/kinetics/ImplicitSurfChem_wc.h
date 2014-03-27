@@ -77,8 +77,8 @@ public:
      *           internal degrees of freedom representing the concentration
      *           of surface adsorbates.
      */
-    ImplicitSurfChem_wc(InterfaceKinetics* k,Transport* t,double h,double wc_thickness,
-    		            int nx,double area_to_volume);
+    ImplicitSurfChem_wc(InterfaceKinetics* k,Transport* t,double h,double h_temp,double wc_thickness,
+    		            int nx,double area_to_volume,bool with_energy);
 
     /**
      * Destructor. Deletes the integrator.
@@ -134,49 +134,95 @@ public:
 protected:
 
 
-    //! Set the mixture to a state consistent with solution
-    //! vector y.
-    /*!
-     *  This function will set the surface site factions
-     *  in the underlying %SurfPhase objects to the current
-     *  value of the solution vector.
-     *
-     * @param y Current value of the solution vector.
-     *          The lenth is equal to the sum of the number of surface
-     *          sites in all the surface phases
-     */
 
-    //! vector of pointers to surface phases.
-
+    // Type to store varialbes that exist in every cell
+	// for a number of components
     typedef std::vector<std::vector<double> > comp_vector;
+
+    // Type for scalar variables on the grid
     typedef std::vector<double> grid_vector;
 
+
+    // Bulk Values
     std::vector<doublereal> m_bulk_massfraction;
     std::vector<doublereal> m_bulk_diff_coeffs;
+    doublereal m_bulk_diff_temp;
     doublereal m_bulk_density;
     doublereal m_bulk_temperature;
     doublereal m_bulk_pressure;
 
+    // Fluxes for the species
     comp_vector m_fluxes;
 
+    // Fluxes for the energy equation
+    std::vector<doublereal> m_fluxes_temp;
+
+    // Thermal conductivity for temperature
+    std::vector<doublereal> m_diff_temp;
+
+    // Temporary arrays for species
     std::vector<doublereal> m_temp_vol_massfraction;
     std::vector<doublereal> m_temp_surf_massfraction;
-    std::vector<doublereal> m_temp_production_rates;
 
+    // Temporary arrays for species production rates
+    std::vector<doublereal> m_temp_production_rates;
+    // Temporary reaction rates
+    std::vector<doublereal> m_temp_rates_of_progress;
+    // Temporary arrays for reaction enthalpy
+    std::vector<doublereal> m_temp_delta_enthalpy;
+
+    // Number of cell centers
+    int m_nx;
+
+    // Number of cell corners
+    int m_nco;
+
+    // Number of cell centers +2
+    // Includes values at the boundary
+    int m_nx_var;
+
+    // Corner coordinates
     grid_vector m_x_co;
+
+    // Cell center coordinates
+    // includes the coordinates of the two boundaries
     grid_vector m_x;
+
+    // Dx values for all the cells
     grid_vector m_dx;
+
+    // Interpolation coefficients
     grid_vector m_fx;
 
-    double m_wc_thickness;
-    double m_area_to_volume;
+    // Washcoat thickness
+    doublereal m_wc_thickness;
 
+    // Area to volume ratio
+    doublereal m_area_to_volume;
+
+
+    // Bulk mass-transfer coefficient
+    doublereal m_wc_coefficient;
+
+    // Bulk heat-transfer coefficient
+    doublereal m_wc_coefficient_temp;
+
+    // Density at each grid point including boundaries
     grid_vector m_rho;
+
+    // Diffusion Coefficients at each grid point including boundaries
     comp_vector m_diff_coeffs;
 
+    // Pointer to transport manager
     Transport* m_transport;
+
+    // Pointer to gas phase
     ThermoPhase* m_gas_phase;
+
+    // Pointer to surface phase
     SurfPhase* m_surface_phase;
+
+    // Pointer to interface kinetics object
     InterfaceKinetics* m_kin;
 
     //! Pointer to the cvode integrator
@@ -184,25 +230,31 @@ protected:
     doublereal m_atol, m_rtol;   // tolerances
     doublereal m_maxstep;        // max step size
 
-    int m_nx;
-    int m_nco;
-    int m_nx_var;
+    // Number of volume species
     int m_vol_sp;
+
+    // Number of surface species
     int m_surf_sp;
 
-    doublereal m_wc_coefficient;
+    bool m_with_energy;
 
+    // Number of variables for the
+    // ODE solver (gridpoints *variables)
     int m_nvars;
-    enum vars_enum{en_temperature,en_end};
+
+
+    // Type for the variable enumerations
+    // en_start makes sure they start at zero
+    enum vars_enum{en_start=0};
+
+    std::vector<vars_enum> en_vol_comp;
+    std::vector<vars_enum> en_surf_comp;
+    vars_enum en_temperature;
 
 	doublereal getStateVar(double* state,vars_enum var,int loc_idx);
 	void setStateVar(double* state,double value,vars_enum var,int loc_idx);
 	void createGrid();
 
-
-
-    std::vector<vars_enum> en_vol_comp;
-    std::vector<vars_enum> en_surf_comp;
 
 void getInitialConditions(doublereal t0, size_t lenc,doublereal* c);
 void update_fluxes(double* state);
