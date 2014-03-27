@@ -1355,15 +1355,19 @@ advanceCoverages_masstransfer(Transport* t,doublereal tstep, doublereal h)
 }
 
 void InterfaceKinetics::advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h,doublereal h_temp,double wc_thickness
-		                                    ,int nx,double area_to_volume, bool with_energy)
+		                                    ,int nx,double area_to_volume, bool with_energy,double atol, double rtol)
 {
     if (m_integrator_wc == 0) {
-        m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,nx,area_to_volume,with_energy);
+        m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,nx,area_to_volume
+        		                                 ,with_energy,atol,rtol);
         m_integrator_wc->initialize();
     }
 
     try{
+      m_integrator_wc->set_bulk_from_state();
+      m_integrator_wc->reinitialize();
       m_integrator_wc->integrate(0.0, tstep);
+      m_integrator_wc->set_state_from_bulk();
     }
     catch (CanteraError e){
     	e.getMessage();

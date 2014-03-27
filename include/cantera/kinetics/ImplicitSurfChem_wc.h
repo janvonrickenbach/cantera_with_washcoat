@@ -78,7 +78,7 @@ public:
      *           of surface adsorbates.
      */
     ImplicitSurfChem_wc(InterfaceKinetics* k,Transport* t,double h,double h_temp,double wc_thickness,
-    		            int nx,double area_to_volume,bool with_energy);
+    		            int nx,double area_to_volume,bool with_energy, double atol, double rtol);
 
     /**
      * Destructor. Deletes the integrator.
@@ -91,7 +91,11 @@ public:
      */
     virtual void initialize(doublereal t0 = 0.0);
 
-    virtual void set_wc_coefficient(doublereal h);
+    /**
+     * Overloads the virtual function
+     * declared in FuncEval.
+     */
+    virtual void reinitialize(doublereal t0=0.0);
 
 
     //! Integrate from t0 to t1. The integrator is reinitialized first.
@@ -129,7 +133,24 @@ public:
     virtual void eval(doublereal t, doublereal* y, doublereal* ydot,
                       doublereal* p);
 
+    // This is called by the CVODE integrator in the beginning
+	// to initialize the state vector
+	void getInitialConditions(doublereal t0, size_t lenc,doublereal* c);
+
+	// Returns the length of the state vector. Called by CVODE
+	size_t neq() {return m_nvars*m_nx;}
+
+
+	// Writes all the variables to file
 	void printGrid();
+
+	// Initialize the bulk values from the state of
+	// m_gas_phase
+	void set_bulk_from_state();
+
+	// Reset the state of m_gas_phase to
+	// the bulk state
+	void set_state_from_bulk();
 
 protected:
 
@@ -162,6 +183,7 @@ protected:
 
     // Temporary arrays for species
     std::vector<doublereal> m_temp_vol_massfraction;
+    std::vector<doublereal> m_temp_diff_coeffs;
     std::vector<doublereal> m_temp_surf_massfraction;
 
     // Temporary arrays for species production rates
@@ -251,24 +273,39 @@ protected:
     std::vector<vars_enum> en_surf_comp;
     vars_enum en_temperature;
 
+    // Takes a state vector gets the value of var at grid point
+    // loc_idx
+    // loc_idx is the index in the state vector, which means boundary
+    // points are not included
 	doublereal getStateVar(double* state,vars_enum var,int loc_idx);
+
+    // Takes a state vector sets value of var at grid point
+    // loc_idx
+    // loc_idx is the index in the state vector, which means boundary
+    // points are not included
 	void setStateVar(double* state,double value,vars_enum var,int loc_idx);
+
+	// Creates the grid. This routine takes nx and wc_thickness
+	// and buids a grid. It set the corner coordinates and the
+	// interpolation cofficinets for the faces
 	void createGrid();
 
+    // Updated the fluxes for all the species and the energy equation
+	void update_fluxes(double* state);
 
-void getInitialConditions(doublereal t0, size_t lenc,doublereal* c);
-void update_fluxes(double* state);
-double interpolate_values(double fxp,double val,double valw);
+    // Uses the interpolation coefficients to interpolate the
+	// input values th a cell phase
+	double interpolate_values(double fxp,double val,double valw);
 
-void write_var(std::ofstream& myfile,const std::vector<double>& vec);
-size_t neq() {return m_nvars*m_nx;}
+    // Writes a single variable to a file myfile
+	// The vector should have length m_nx_var
+	void write_var(std::ofstream& myfile,const std::vector<double>& vec);
 
+	// Updates the material properties
+	// Diffusion coefficient, conductivity, density
+	// Currently sets it to the bulk state
+    void update_material_properties(double* y);
 
-private:
-
-    //! Controls the amount of printing from this routine
-    //! and underlying routines.
-    int m_ioFlag;
 };
 
 }

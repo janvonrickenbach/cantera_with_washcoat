@@ -17,11 +17,11 @@
 namespace Cantera{
 // Constructor
 ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k, Transport* t,double h,double h_temp,double wc_thickness,
-		                                 int nx,double area_to_volume,bool with_energy) :
+		                                 int nx,double area_to_volume,bool with_energy, double atol, double rtol) :
     FuncEval(),
     m_integ(0),
-    m_atol(1.e-25),
-    m_rtol(1.e-7),
+    m_atol(atol),
+    m_rtol(rtol),
     m_maxstep(0.0),
     m_transport(t),
     m_wc_coefficient(h),
@@ -35,17 +35,18 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k, Transport* t,doub
 
 {
 
+	// Set number of corners
     m_nco    = m_nx+1;
+	// Set points where the variables are stored
 	m_nx_var = m_nx+2;
 
+	// Initialize the grid
 	createGrid();
 
+	//Initial integrator
     m_integ = newIntegrator("CVODE");
-
-
     // use backward differencing, with a full Jacobian computed
     // numerically, and use a Newton linear iterator
-
     m_integ->setMethod(BDF_Method);
     m_integ->setProblemType(DENSE + NOJAC);
     m_integ->setIterator(Newton_Iter);
@@ -54,8 +55,10 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k, Transport* t,doub
     	std::cout << "Error more than two phases" << std::endl;
     }
 
-    // Identify gas phase and store pointer in member
+    // Identify surface phase and store pointer
     m_surface_phase = (SurfPhase* )&k->thermo(k->surfacePhaseIndex());
+
+    // Identify gas phase and store pointer
     for (int phase_idx=0;phase_idx< k->nPhases();++phase_idx){
       if (phase_idx != k->surfacePhaseIndex()){
         m_gas_phase    = &k->thermo(phase_idx);
@@ -66,22 +69,20 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k, Transport* t,doub
     m_vol_sp  = m_gas_phase->nSpecies();
     m_surf_sp = k->nTotalSpecies() - m_vol_sp;
 
-    m_temp_vol_massfraction.resize(m_vol_sp);
-    m_temp_surf_massfraction.resize(m_surf_sp);
-    m_temp_production_rates.resize(m_surf_sp+m_vol_sp);
 
-	// Get the bulk values
-	m_bulk_massfraction.resize(m_vol_sp);
-	m_bulk_diff_coeffs.resize(m_vol_sp);
+    // Allocate temporary arrays
+    m_temp_vol_massfraction.resize(m_vol_sp,0);
+    m_temp_diff_coeffs.resize(m_vol_sp,0);
+    m_temp_surf_massfraction.resize(m_surf_sp,0);
+    m_temp_production_rates.resize(m_surf_sp+m_vol_sp,0);
 
-	m_gas_phase->getMassFractions(&m_bulk_massfraction.front());
-	m_bulk_pressure    = m_gas_phase->pressure();
-	m_bulk_density     = m_gas_phase->density();
-	m_transport->getMixDiffCoeffs(&m_bulk_diff_coeffs.front());
+	// Initialize bulk arrays
+	m_bulk_massfraction.resize(m_vol_sp,0);
+	m_bulk_diff_coeffs.resize(m_vol_sp,0);
 
+
+	// Initialize arrays related to energy
 	if (m_with_energy){
-	   m_bulk_temperature = m_gas_phase->temperature();
-	   m_bulk_diff_temp   = m_transport->thermalConductivity();
        m_temp_rates_of_progress.resize(m_kin->nReactions());
        m_temp_delta_enthalpy.resize(m_kin->nReactions());
 	}
@@ -102,23 +103,29 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k, Transport* t,doub
     	en_temperature = static_cast<vars_enum>(en_start+m_vol_sp+m_surf_sp);
     }
 
-    comp_vector::iterator comp_iter;
-    // Initialize arrays
-    m_bulk_massfraction.resize(m_vol_sp);
+    // Set number of variables
+    m_nvars = m_surf_sp + m_vol_sp;
+
+    if (with_energy) m_nvars +=1;
+
+
+    // Initialize fluxes arrays
     m_fluxes.resize(m_vol_sp);
 
-    if (with_energy) m_fluxes_temp.resize(m_nco);
-    if (with_energy) m_diff_temp.resize(m_nx_var);
+    if (with_energy) m_fluxes_temp.resize(m_nco,0.0);
 
+    comp_vector::iterator comp_iter;
     for (comp_iter =  m_fluxes.begin();
     	 comp_iter != m_fluxes.end();
     	 ++comp_iter){
-    	comp_iter->resize(m_nco);
+    	comp_iter->resize(m_nco,0);
     }
 
+    // Initialize arrays for density and diffusion
+    // coefficients
     m_rho.resize(m_nx_var);
     m_diff_coeffs.resize(m_nx_var);
-
+    if (with_energy) m_diff_temp.resize(m_nx_var);
 
     for (comp_iter =  m_diff_coeffs.begin();
     	 comp_iter != m_diff_coeffs.end();
@@ -126,21 +133,6 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k, Transport* t,doub
     	comp_iter->resize(m_vol_sp);
     }
 
-    m_nvars = m_surf_sp + m_vol_sp;
-
-    if (with_energy) m_nvars +=1;
-
-
-    for (int loc_idx=0;loc_idx<m_nx_var;++loc_idx){
-      m_rho[loc_idx]       = m_bulk_density;
-
-      if (m_with_energy){
-         m_diff_temp[loc_idx] = m_bulk_diff_temp;
-      }
-	  for (int nc=0;nc<m_vol_sp;++nc){
-	    m_diff_coeffs[loc_idx][nc] = m_bulk_diff_coeffs[nc];
-	  }
-	}
 
 
 }
@@ -164,12 +156,9 @@ void ImplicitSurfChem_wc::initialize(doublereal t0)
     m_integ->initialize(t0, *this);
 }
 
-/*
- *  Set masstransfer coefficient
- */
-void ImplicitSurfChem_wc::set_wc_coefficient(doublereal h)
+void ImplicitSurfChem_wc::reinitialize(doublereal t0)
 {
-    m_wc_coefficient = h;
+    m_integ->reinitialize(t0, *this);
 }
 
 
@@ -211,11 +200,12 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
 {
 	double source = 0.0;
 	update_fluxes(y);
+	update_material_properties(y);
 	double dx;
 
 
     for (int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
-      dx = m_x[g_idx_p+2] - m_x[g_idx_p+1];
+      dx = m_x_co[g_idx_p+1] - m_x_co[g_idx_p];
 
 	  for (int nc =0;nc<m_vol_sp;++nc){
 		m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],g_idx_p);
@@ -223,6 +213,8 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
 	  for (int nc =0;nc<m_surf_sp;++nc){
 		m_temp_surf_massfraction[nc] = getStateVar(y,en_surf_comp[nc],g_idx_p);
 	  }
+
+
 
 	  m_gas_phase->setMassFractions(&m_temp_vol_massfraction.front());
 	  m_surface_phase->setMassFractions(&m_temp_surf_massfraction.front());
@@ -476,5 +468,72 @@ void ImplicitSurfChem_wc::getInitialConditions(doublereal t0, size_t lenc,
     }
 
 }
+void ImplicitSurfChem_wc::update_material_properties(double* y){
+	double temperature;
+
+    for (int loc_idx=0;loc_idx<m_nx_var;++loc_idx){
+
+      // Compute the surface massfraction based on the flux condtion
+      if (loc_idx == 0){
+	     for (int nc =0;nc<m_vol_sp;++nc){
+    	    m_temp_vol_massfraction[nc] = -m_fluxes[nc][0]/
+    	    		                     (m_bulk_diff_coeffs[nc]*
+    	    		                      m_wc_coefficient * m_bulk_density)
+    	    		                      + m_bulk_massfraction[nc];
+	     }
+	     temperature = -m_fluxes_temp[0]/
+    	    		   (m_bulk_diff_temp *
+    	    		    m_wc_coefficient_temp)
+    	    		  + m_bulk_temperature;
+      }
+
+      // Use the same value at the boundary since the flux is zero
+      else if (loc_idx == m_nx_var-1){
+	     for (int nc =0;nc<m_vol_sp;++nc){
+    	    m_temp_vol_massfraction[nc] = getStateVar(y,en_vol_comp[nc],loc_idx-2);
+	     }
+	     temperature = getStateVar(y,en_temperature,loc_idx-2);
+      }
+
+      else{
+        for (int nc =0;nc<m_vol_sp;++nc){
+		  m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],loc_idx-1);
+	    }
+	    temperature = getStateVar(y,en_temperature,loc_idx-1);
+      }
+
+	  m_gas_phase->setState_TPY(temperature,m_bulk_pressure
+			                   ,&m_temp_vol_massfraction.front());
+
+      m_rho[loc_idx]       = m_gas_phase->density();
+      if (m_with_energy){
+         m_diff_temp[loc_idx] = m_transport->thermalConductivity();
+      }
+
+      m_transport->getMixDiffCoeffs(&m_temp_diff_coeffs.front());
+	  for (int nc=0;nc<m_vol_sp;++nc){
+	    m_diff_coeffs[loc_idx][nc] = m_temp_diff_coeffs[nc];
+	  }
+	}
 
 }
+
+
+void ImplicitSurfChem_wc::set_bulk_from_state(){
+	m_gas_phase->getMassFractions(&m_bulk_massfraction.front());
+	m_bulk_pressure    = m_gas_phase->pressure();
+	m_bulk_density     = m_gas_phase->density();
+    m_bulk_temperature = m_gas_phase->temperature();
+	m_transport->getMixDiffCoeffs(&m_bulk_diff_coeffs.front());
+	m_bulk_diff_temp = m_transport->thermalConductivity();
+
+}
+
+void ImplicitSurfChem_wc::set_state_from_bulk(){
+	m_gas_phase->setState_TPY(m_bulk_temperature
+			                 ,m_bulk_pressure
+			                 ,&m_bulk_massfraction.front());
+
+}
+
+} // namespace Cantera
