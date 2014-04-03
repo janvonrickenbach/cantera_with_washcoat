@@ -24,6 +24,7 @@ class InterfaceKinetics;
 class SurfPhase;
 class Transport;
 class ThermoPhase;
+class wcdata;
 
 
 //! Advances the surface coverages of the associated set of SurfacePhase
@@ -77,8 +78,14 @@ public:
      *           internal degrees of freedom representing the concentration
      *           of surface adsorbates.
      */
-    ImplicitSurfChem_wc(InterfaceKinetics* k,Transport* t,double h,double h_temp,double wc_thickness,
-    		            int nx,double area_to_volume,bool with_energy, double atol, double rtol);
+    ImplicitSurfChem_wc(InterfaceKinetics* k
+    		           ,Transport* t
+    		           ,double h,double h_temp
+    		           ,double wc_thickness, double area_to_volume
+    		           ,double porosity, double tortuosity
+    		           ,double d_p, double lambda_solid
+    		           ,double atol, double rtol
+		               ,int nx,bool with_energy);
 
     /**
      * Destructor. Deletes the integrator.
@@ -152,6 +159,29 @@ public:
 	// the bulk state
 	void set_state_from_bulk();
 
+	//Getters
+	int get_nx() const {
+		return m_nx;
+	}
+
+	int get_vol_sp() const {
+		return m_vol_sp;
+	}
+
+	int get_surf_sp() const {
+		return m_surf_sp;
+	}
+
+
+	// Get the state from a wcdata object
+	void get_state(wcdata& data) const;
+	void get_state_object(wcdata& data);
+	// Set the state from to wcdata object
+	void set_state(double* state, const wcdata& data);
+
+	void set_wcdata(wcdata* wcdata);
+
+
 protected:
 
 
@@ -222,6 +252,17 @@ protected:
     // Area to volume ratio
     doublereal m_area_to_volume;
 
+    // Washcoat pore diameter
+    doublereal m_dp;
+
+    // Washcoat porostiy
+    doublereal  m_porosity;
+
+    // Washcoat tortuosity
+    doublereal m_tortuosity;
+
+    // Washcoat solid conductivity
+    doublereal m_lambda_solid;
 
     // Bulk mass-transfer coefficient
     doublereal m_wc_coefficient;
@@ -246,6 +287,9 @@ protected:
 
     // Pointer to interface kinetics object
     InterfaceKinetics* m_kin;
+
+    // Pointer wcdata object
+    wcdata* m_wc_data;
 
     //! Pointer to the cvode integrator
     Integrator* m_integ;
@@ -277,7 +321,7 @@ protected:
     // loc_idx
     // loc_idx is the index in the state vector, which means boundary
     // points are not included
-	doublereal getStateVar(double* state,vars_enum var,int loc_idx);
+	doublereal getStateVar(double* state,vars_enum var,int loc_idx) const;
 
     // Takes a state vector sets value of var at grid point
     // loc_idx

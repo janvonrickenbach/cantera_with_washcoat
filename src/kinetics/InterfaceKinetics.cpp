@@ -15,7 +15,8 @@
 #include "cantera/kinetics/ImplicitSurfChem.h"
 #include "cantera/kinetics/ImplicitSurfChem_masstransfer.h"
 #include "cantera/kinetics/ImplicitSurfChem_wc.h"
-
+#include "cantera/kinetics/wcdata.h"
+#include "cantera/kinetics/wcdata_container.h"
 
 using namespace std;
 
@@ -1354,28 +1355,61 @@ advanceCoverages_masstransfer(Transport* t,doublereal tstep, doublereal h)
     m_integrator_masstransfer = 0;
 }
 
-void InterfaceKinetics::advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h,doublereal h_temp,double wc_thickness
-		                                    ,int nx,double area_to_volume, bool with_energy,double atol, double rtol)
-{
-    if (m_integrator_wc == 0) {
-        m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,nx,area_to_volume
-        		                                 ,with_energy,atol,rtol);
-        m_integrator_wc->initialize();
-    }
+void InterfaceKinetics::initialize_wcmodel(Transport* t
+										  ,doublereal h, doublereal h_temp
+										  ,doublereal wc_thickness
+										  ,doublereal area_to_volume
+										  ,doublereal porosity
+										  ,doublereal tortuosity
+										  ,doublereal d_p
+										  ,doublereal lambda_solid
+										  ,doublereal atol
+										  ,doublereal rtol
+										  ,int nx
+										  ,bool with_energy
+										  ,int istorf){
+	m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity,d_p
+			                                 ,lambda_solid,atol,rtol,nx,with_energy);
 
+	// Create an wcdata object with the state of the kinetics object
+	wcdata* wcdata_bulk = new wcdata(m_integrator_wc);
+
+	// Create a container and use the wcdata_bulk state for all of them
+	m_wc_container  = new wcdata_container(istorf,m_integrator_wc,wcdata_bulk);
+	delete wcdata_bulk;
+
+
+}
+
+void InterfaceKinetics::advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii)
+{
+
+	wcdata* wc_data = m_wc_container->get_wcdata(iistr1_nb,ii);
     try{
       m_integrator_wc->set_bulk_from_state();
-      m_integrator_wc->reinitialize();
+      m_integrator_wc->set_wcdata(wc_data);
+      m_integrator_wc->initialize();
       m_integrator_wc->integrate(0.0, tstep);
       m_integrator_wc->set_state_from_bulk();
+      m_integrator_wc->get_state(*wc_data);
     }
     catch (CanteraError e){
     	e.getMessage();
     }
-    m_integrator_wc->printGrid();
-    delete m_integrator_wc;
-    m_integrator_wc = 0;
 }
+
+void InterfaceKinetics::write_wcdata(int iistr1_nb,int ii)
+{
+
+	wcdata* wc_data = m_wc_container->get_wcdata(iistr1_nb,ii);
+	wc_data->write_data();
+}
+
+void InterfaceKinetics::end_wcmodel(){
+	delete m_integrator_wc;
+	delete m_wc_container;
+}
+
 //================================================================================================
 // Solve for the pseudo steady-state of the surface problem
 /*
