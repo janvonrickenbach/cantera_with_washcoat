@@ -24,6 +24,7 @@ class InterfaceKinetics;
 class SurfPhase;
 class Transport;
 class ThermoPhase;
+class wcdata;
 
 
 //! Advances the surface coverages of the associated set of SurfacePhase
@@ -77,8 +78,14 @@ public:
      *           internal degrees of freedom representing the concentration
      *           of surface adsorbates.
      */
-    ImplicitSurfChem_wc(InterfaceKinetics* k,Transport* t,double h,double h_temp,double wc_thickness,
-    		            int nx,double area_to_volume,bool with_energy, double atol, double rtol);
+    ImplicitSurfChem_wc(InterfaceKinetics* k
+    		           ,Transport* t
+    		           ,double h,double h_temp
+    		           ,double wc_thickness, double area_to_volume
+    		           ,double porosity, double tortuosity
+    		           ,double d_p, double lambda_solid
+    		           ,double atol, double rtol
+		               ,int nx,bool with_energy);
 
     /**
      * Destructor. Deletes the integrator.
@@ -134,23 +141,48 @@ public:
                       doublereal* p);
 
     // This is called by the CVODE integrator in the beginning
-	// to initialize the state vector
-	void getInitialConditions(doublereal t0, size_t lenc,doublereal* c);
+    // to initialize the state vector
+    void getInitialConditions(doublereal t0, size_t lenc,doublereal* c);
 
-	// Returns the length of the state vector. Called by CVODE
-	size_t neq() {return m_nvars*m_nx;}
+    // Returns the length of the state vector. Called by CVODE
+    size_t neq() {return m_nvars*m_nx;}
 
 
-	// Writes all the variables to file
-	void printGrid();
+    // Writes all the variables to file
+    void printGrid();
 
-	// Initialize the bulk values from the state of
-	// m_gas_phase
-	void set_bulk_from_state();
+    // Initialize the bulk values from the state of
+    // m_gas_phase
+    void set_bulk_from_state();
 
 	// Reset the state of m_gas_phase to
 	// the bulk state
 	void set_state_from_bulk();
+
+	//Getters
+	int get_nx() const {
+		return m_nx;
+	}
+
+	int get_vol_sp() const {
+		return m_vol_sp;
+	}
+
+	int get_surf_sp() const {
+		return m_surf_sp;
+	}
+
+
+	// Get the state from a wcdata object
+	void get_state(wcdata& data) const;
+	void get_state_object(wcdata& data);
+	// Set the state from to wcdata object
+	void set_state(double* state, const wcdata& data);
+
+	void set_wcdata(wcdata* wcdata);
+
+   void get_fluxes(double* y);
+
 
 protected:
 
@@ -222,6 +254,17 @@ protected:
     // Area to volume ratio
     doublereal m_area_to_volume;
 
+    // Washcoat pore diameter
+    doublereal m_dp;
+
+    // Washcoat porostiy
+    doublereal  m_porosity;
+
+    // Washcoat tortuosity
+    doublereal m_tortuosity;
+
+    // Washcoat solid conductivity
+    doublereal m_lambda_solid;
 
     // Bulk mass-transfer coefficient
     doublereal m_wc_coefficient;
@@ -247,10 +290,16 @@ protected:
     // Pointer to interface kinetics object
     InterfaceKinetics* m_kin;
 
+    // Pointer wcdata object
+    wcdata* m_wc_data;
+
     //! Pointer to the cvode integrator
     Integrator* m_integ;
     doublereal m_atol, m_rtol;   // tolerances
     doublereal m_maxstep;        // max step size
+
+
+    std::vector<doublereal> m_fluxes_return;
 
     // Number of volume species
     int m_vol_sp;
@@ -277,12 +326,12 @@ protected:
     // loc_idx
     // loc_idx is the index in the state vector, which means boundary
     // points are not included
-	doublereal getStateVar(double* state,vars_enum var,int loc_idx);
+	doublereal getStateVar(double* state,vars_enum var,int loc_idx) const;
 
     // Takes a state vector sets value of var at grid point
     // loc_idx
     // loc_idx is the index in the state vector, which means boundary
-    // points are not included
+	// points are not included
 	void setStateVar(double* state,double value,vars_enum var,int loc_idx);
 
 	// Creates the grid. This routine takes nx and wc_thickness
@@ -297,14 +346,15 @@ protected:
 	// input values th a cell phase
 	double interpolate_values(double fxp,double val,double valw);
 
-    // Writes a single variable to a file myfile
+	// Writes a single variable to a file myfile
 	// The vector should have length m_nx_var
 	void write_var(std::ofstream& myfile,const std::vector<double>& vec);
 
 	// Updates the material properties
 	// Diffusion coefficient, conductivity, density
 	// Currently sets it to the bulk state
-    void update_material_properties(double* y);
+   void update_material_properties(double* y);
+
 
 };
 

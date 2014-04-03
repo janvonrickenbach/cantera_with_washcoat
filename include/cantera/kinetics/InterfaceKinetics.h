@@ -33,6 +33,8 @@ class SurfPhase;
 class ImplicitSurfChem;
 class ImplicitSurfChem_masstransfer;
 class ImplicitSurfChem_wc;
+class wcdata_container;
+class wcdata;
 
 //!  A kinetics manager for heterogeneous reaction mechanisms. The
 //!  reactions are assumed to occur at a 2D interface between two 3D phases.
@@ -496,9 +498,22 @@ public:
      *             time used in the initial transient algorithm,
      *             before the equation system is solved directly.
      */
-    void advanceCoverages_wc(Transport* t,doublereal tstep, doublereal h,doublereal h_temp,doublereal wc_thickness
-    		                ,int nx,double area_to_volume,bool with_energy,double atol, double rtol);
-
+    void initialize_wcmodel(Transport* t
+                           ,doublereal h, doublereal h_temp
+                           ,doublereal wc_thickness
+                           ,doublereal area_to_volume
+                           ,doublereal porosity
+                           ,doublereal tortuosity
+                           ,doublereal d_p
+                           ,doublereal lambda_solid
+                           ,doublereal atol
+                           ,doublereal rtol
+                           ,int nx
+                           ,bool with_energy
+                           ,int istorf);
+    void advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes, int size_fluxes);
+    void write_wcdata(int iistr1_nb,int ii);
+    void end_wcmodel();
     //! Solve for the pseudo steady-state of the surface problem
     /*!
      * Solve for the steady state of the surface problem.
@@ -779,6 +794,7 @@ protected:
     ImplicitSurfChem* m_integrator;
     ImplicitSurfChem_masstransfer* m_integrator_masstransfer;
     ImplicitSurfChem_wc* m_integrator_wc;
+    wcdata_container* m_wc_container;
 
     vector_fp m_beta;
 
