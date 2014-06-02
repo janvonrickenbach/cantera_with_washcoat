@@ -14,7 +14,7 @@ namespace Cantera{
 
 wcdata_container::wcdata_container(int istorf,Cantera::ImplicitSurfChem_wc* integ,wcdata* data):
 	m_istorf(istorf){
-	for (int ind=0;ind<istorf;ind++){
+	for (int ind=0;ind<istorf;++ind){
 		m_data_vec.push_back(new wcdata(integ,data));
 	}
 }

@@ -35,9 +35,9 @@ wcdata::wcdata(Cantera::ImplicitSurfChem_wc* wc_obj):
    m_surf_sp = wc_obj->get_surf_sp();
    m_nx      = wc_obj->get_nx();
 
-   m_vol_massfractions.resize(m_nx*m_vol_sp);
+   m_vol_massfractions.resize((m_nx+1)*m_vol_sp);
    m_surf_massfractions.resize(m_nx*m_surf_sp);
-   m_temperature.resize(m_nx);
+   m_temperature.resize(m_nx+1);
 
 	m_wc_obj->get_state_object(*this);
 
@@ -72,12 +72,12 @@ wcdata::~wcdata() {
 	// TODO Auto-generated destructor stub
 }
 
-void wcdata::write_data() const {
+void wcdata::write_data(int ii, double x_coord,int proc) const {
 	std::ofstream myfile;
 	std::stringstream ss;
 	std::string temp_string;
 
-	ss << "grid_" << m_nx << ".dat";
+	ss << "grid_" << ii <<"_" << proc << ".dat";
 
 	temp_string = ss.str();
 	myfile.open(temp_string.c_str());
@@ -85,23 +85,24 @@ void wcdata::write_data() const {
     grid_vec::const_iterator it;
     int idx;
 
+    myfile << "# xcoord: " << x_coord << std::endl;
     for (idx=0,it = m_vol_massfractions.begin();
        it!=m_vol_massfractions.end();++it,++idx){
         myfile << *it << " ";
-       if (!((idx+1) % m_nx)) myfile << std::endl;
+       if (!((idx+1) % (m_nx+1))) myfile << std::endl;
     }
 
 
     for (idx=0,it = m_surf_massfractions.begin();
        it!=m_surf_massfractions.end();++it,++idx){
        myfile << *it << " ";
-       if (!((idx+1) % m_nx)) myfile << std::endl;
+       if (!((idx+1) % (m_nx))) myfile << 0  << std::endl;
     }
 
     for (idx=0,it = m_temperature.begin();
        it!=m_temperature.end();++it,++idx){
-       myfile << *it-1000 << " ";
-       if (!((idx+1) % m_nx)) myfile << std::endl;
+       myfile << *it << " ";
+       if (!((idx+1) % (m_nx+1))) myfile << std::endl;
     }
 
     myfile.close();

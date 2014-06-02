@@ -58,8 +58,8 @@ public:
      * @param msg      String message to be written to cout
      */
     virtual void write(const std::string& msg) {
-        //std::cout << msg;
-       std::cout << "Error occured\n";
+        std::cerr << msg;
+        //std::cout << "Error occured\n";
     }
 
     //! Write an end of line character and flush output.

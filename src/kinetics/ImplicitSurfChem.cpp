@@ -25,7 +25,7 @@ ImplicitSurfChem::ImplicitSurfChem(vector<InterfaceKinetics*> k) :
     m_numTotalSpecies(0),
     m_integ(0),
     m_atol(1.e-25),
-    m_rtol(1.e-7),
+    m_rtol(1.e-8),
     m_maxstep(0.0),
     m_mediumSpeciesStart(-1),
     m_bulkSpeciesStart(-1),

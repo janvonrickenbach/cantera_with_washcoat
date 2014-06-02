@@ -187,10 +187,11 @@ void ImplicitSurfChem_wc::reinitialize(doublereal t0)
  *  @param t0  Initial Time -> this is an input
  *  @param t1  Final Time -> This is an input
  */
-void ImplicitSurfChem_wc::integrate(doublereal t0, doublereal t1)
+void ImplicitSurfChem_wc::integrate(doublereal t0, doublereal t1,int maxsteps)
 {
     m_integ->initialize(t0, *this);
     m_integ->setMaxStepSize(t1 - t0);
+    m_integ->setMaxSteps(maxsteps);
     m_integ->integrate(t1);
 }
 
@@ -232,7 +233,11 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
          m_temp_surf_massfraction[nc] = getStateVar(y,en_surf_comp[nc],g_idx_p);
         }
 
-        temperature = std::max(getStateVar(y,en_temperature,g_idx_p),100.0);
+        if (m_with_energy) {
+           temperature = std::max(getStateVar(y,en_temperature,g_idx_p),100.0);
+        } else{
+           temperature = m_bulk_temperature;
+        }
         m_gas_phase->setState_TPY(temperature,m_bulk_pressure,&m_temp_vol_massfraction.front());
         m_surface_phase->setMassFractions(&m_temp_surf_massfraction.front());
         m_surface_phase->setTemperature(temperature);
@@ -240,15 +245,16 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
 
         for (int nc =0;nc<m_vol_sp;++nc){
            source = 0.0;
-           source = m_fluxes[nc][g_idx_p] - m_fluxes[nc][g_idx_p+1];
-           source = source + m_temp_production_rates[nc] * dx
+           source = (m_fluxes[nc][g_idx_p] - m_fluxes[nc][g_idx_p+1])/(dx+m_small);
+           source = source + m_temp_production_rates[nc]
                            * m_gas_phase->molecularWeight(nc)
                            * m_area_to_volume;
            setStateVar(ydot,source,en_vol_comp[nc],g_idx_p);
         }
         for (int nc =0;nc<m_surf_sp;++nc){
            source = 0.0;
-           source = source + m_temp_production_rates[nc+m_vol_sp];
+           source = source + m_temp_production_rates[nc+m_vol_sp]
+                            / m_surface_phase->siteDensity();
 
            setStateVar(ydot,source,en_surf_comp[nc],g_idx_p);
         }
@@ -273,14 +279,17 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
         m_surface_phase->setTemperature(temperature);
 
         m_kin->getNetRatesOfProgress(&m_temp_rates_of_progress.front());
-          m_kin->getDeltaEnthalpy(&m_temp_delta_enthalpy.front());
+        m_kin->getDeltaEnthalpy(&m_temp_delta_enthalpy.front());
         for (int nr=0;nr < m_kin->nReactions();++nr){
            source -= m_area_to_volume *
                      m_temp_rates_of_progress[nr] * m_temp_delta_enthalpy[nr]*dx;
         }
+        // Taking into account the thermal inertia of the solid
+        source = source/(1E6*dx);
         setStateVar(ydot,source,en_temperature,g_idx_p);
       }
    }
+
 
 }
 
@@ -428,13 +437,17 @@ void ImplicitSurfChem_wc::update_fluxes(double* state){
          m_fluxes[nc][g_idx_w] =  m_fluxes[nc][g_idx_w] *
                         (getStateVar(state,en_vol_comp[nc],state_idx_w) -
                          getStateVar(state,en_vol_comp[nc],state_idx_p)) /
-                         (m_x[var_idx_p] - m_x[var_idx_w]);
+                         (m_x[var_idx_p] - m_x[var_idx_w] + m_small);
       }
 
 
       //D_b*D_i*h*rho_b*rho_i*(-Y_1 + Y_b)/(D_b*dx*h*rho_b + D_i*rho_i)
       // Apply the boundary condition for the first cell
-      dx_inf = m_x[1] - m_x[0];
+      if (m_nx == 1){
+         dx_inf = 0.0;
+      }else{
+         dx_inf = m_x[1] - m_x[0];
+      }
       prefactor_inf = interpolate_values(m_fx[0],prefactor[0],prefactor[1]);
       prefactor_bulk = m_bulk_diff_coeffs[nc] * m_bulk_density
                        * m_wc_coefficient * dx_inf;
@@ -444,7 +457,7 @@ void ImplicitSurfChem_wc::update_fluxes(double* state){
       Y_1 = getStateVar(state,en_vol_comp[nc],0);
       m_fluxes[nc][0] =(prefactor_mix *
                 (m_bulk_massfraction[nc]- Y_1 ))/
-               (prefactor_bulk + prefactor_inf);
+               (prefactor_bulk + prefactor_inf + m_small);
 
       }
 
@@ -460,7 +473,7 @@ void ImplicitSurfChem_wc::update_fluxes(double* state){
            m_fluxes_temp[g_idx_w] = m_fluxes_temp[g_idx_w] *
                         (getStateVar(state,en_temperature,state_idx_w) -
                          getStateVar(state,en_temperature,state_idx_p)) /
-                         (m_x[var_idx_p] - m_x[var_idx_w]);
+                         (m_x[var_idx_p] - m_x[var_idx_w] + m_small);
 
         }
 
@@ -469,7 +482,7 @@ void ImplicitSurfChem_wc::update_fluxes(double* state){
         prefactor_bulk   = m_bulk_diff_temp * m_wc_coefficient_temp * dx_inf;
         prefactor_mix    = prefactor_inf * m_wc_coefficient_temp * m_bulk_diff_temp;
         m_fluxes_temp[0] = prefactor_mix * (m_bulk_temperature - T_1)/
-                         (prefactor_bulk + prefactor_inf);
+                         (prefactor_bulk + prefactor_inf + m_small);
        }
 }
 
@@ -485,54 +498,62 @@ void ImplicitSurfChem_wc::update_material_properties(double* y){
    double temperature;
    double knudsen_diff_coeff;
 
-    for (int loc_idx=0;loc_idx<m_nx_var;++loc_idx){
+   temperature = m_bulk_temperature;
+   for (int loc_idx=0;loc_idx<m_nx_var;++loc_idx){
 
-      // Compute the surface massfraction based on the flux condtion
-      if (loc_idx == 0){
-        for (int nc =0;nc<m_vol_sp;++nc){
-           m_temp_vol_massfraction[nc] = -m_fluxes[nc][0]/
-                                      (m_bulk_diff_coeffs[nc]*
-                                       m_wc_coefficient * m_bulk_density)
-                                       + m_bulk_massfraction[nc];
-        }
-        temperature = -m_fluxes_temp[0]/
-                    (m_bulk_diff_temp *
-                     m_wc_coefficient_temp)
-                   + m_bulk_temperature;
-      }
-
-      // Use the same value at the boundary since the flux is zero
-      else if (loc_idx == m_nx_var-1){
-        for (int nc =0;nc<m_vol_sp;++nc){
-           m_temp_vol_massfraction[nc] = getStateVar(y,en_vol_comp[nc],loc_idx-2);
-        }
-        temperature = getStateVar(y,en_temperature,loc_idx-2);
-      }
-
-      else{
-        for (int nc =0;nc<m_vol_sp;++nc){
-        m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],loc_idx-1);
+     // Compute the surface massfraction based on the flux condtion
+     if (loc_idx == 0){
+       for (int nc =0;nc<m_vol_sp;++nc){
+          m_temp_vol_massfraction[nc] = -m_fluxes[nc][0]/
+                                     (m_bulk_diff_coeffs[nc]*
+                                      m_wc_coefficient * m_bulk_density +m_small)
+                                      + m_bulk_massfraction[nc];
        }
-       temperature = getStateVar(y,en_temperature,loc_idx-1);
-      }
+       if (m_with_energy){
+       temperature = -m_fluxes_temp[0]/
+                   (m_bulk_diff_temp *
+                    m_wc_coefficient_temp + m_small)
+                  + m_bulk_temperature;
+       }
 
-     m_gas_phase->setState_TPY(temperature,m_bulk_pressure
-                            ,&m_temp_vol_massfraction.front());
-
-      m_rho[loc_idx]       = m_gas_phase->density();
-      if (m_with_energy){
-         m_diff_temp[loc_idx] = m_porosity * m_transport->thermalConductivity()
-                             + (1.0-m_porosity) * m_lambda_solid;
-      }
-
-      m_transport->getMixDiffCoeffs(&m_temp_diff_coeffs.front());
-     for (int nc=0;nc<m_vol_sp;++nc){
-       knudsen_diff_coeff = m_dp/3.0 * sqrt(8.0*GasConstant*temperature/
-                                         (Pi * m_gas_phase->molecularWeight(nc)));
-       m_diff_coeffs[loc_idx][nc] = m_porosity
-                                   /m_tortuosity *
-                                   (1.0/(1.0/knudsen_diff_coeff+1.0/m_temp_diff_coeffs[nc]));
      }
+
+     // Use the same value at the boundary since the flux is zero
+     else if (loc_idx == m_nx_var-1){
+       for (int nc =0;nc<m_vol_sp;++nc){
+          m_temp_vol_massfraction[nc] = getStateVar(y,en_vol_comp[nc],loc_idx-2);
+     }
+       if (m_with_energy){
+          temperature = getStateVar(y,en_temperature,loc_idx-2);
+       }
+     }
+
+     else{
+       for (int nc =0;nc<m_vol_sp;++nc){
+       m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],loc_idx-1);
+      }
+      if (m_with_energy){
+         temperature = getStateVar(y,en_temperature,loc_idx-1);
+      }
+     }
+
+    m_gas_phase->setState_TPY(temperature,m_bulk_pressure
+                           ,&m_temp_vol_massfraction.front());
+
+     m_rho[loc_idx]       = m_gas_phase->density();
+     if (m_with_energy){
+        m_diff_temp[loc_idx] = m_porosity * m_transport->thermalConductivity()
+                            + (1.0-m_porosity) * m_lambda_solid;
+     }
+
+     m_transport->getMixDiffCoeffs(&m_temp_diff_coeffs.front());
+     for (int nc=0;nc<m_vol_sp;++nc){
+      knudsen_diff_coeff = m_dp/3.0 * sqrt(abs(8.0*GasConstant*temperature/
+                                        (Pi * m_gas_phase->molecularWeight(nc))+m_small));
+      m_diff_coeffs[loc_idx][nc] = m_porosity
+                                  /(m_tortuosity + m_small) *
+                                  (1.0/(1.0/(knudsen_diff_coeff + m_small) +1.0/(m_temp_diff_coeffs[nc] + m_small) + m_small));
+    }
    }
 
 }
@@ -542,7 +563,7 @@ void ImplicitSurfChem_wc::set_bulk_from_state(){
    m_gas_phase->getMassFractions(&m_bulk_massfraction.front());
    m_bulk_pressure    = m_gas_phase->pressure();
    m_bulk_density     = m_gas_phase->density();
-    m_bulk_temperature = m_gas_phase->temperature();
+   m_bulk_temperature = m_gas_phase->temperature();
    m_transport->getMixDiffCoeffs(&m_bulk_diff_coeffs.front());
    m_bulk_diff_temp = m_transport->thermalConductivity();
 
@@ -558,8 +579,9 @@ void ImplicitSurfChem_wc::set_state_from_bulk(){
 void ImplicitSurfChem_wc::get_state(wcdata& data) const{
 
    for (int nc=0;nc<m_vol_sp;++nc){
+      data.get_vol_massfractions().at((m_nx+1)*nc)   = m_bulk_massfraction[nc];
       for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
-         data.get_vol_massfractions().at(m_nx*nc+g_idx_p) = getStateVar(m_integ->solution(),en_vol_comp[nc],g_idx_p);
+         data.get_vol_massfractions().at((m_nx+1)*nc+g_idx_p+1) = getStateVar(m_integ->solution(),en_vol_comp[nc],g_idx_p);
       }
    }
 
@@ -569,8 +591,11 @@ void ImplicitSurfChem_wc::get_state(wcdata& data) const{
       }
    }
 
-   for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
-      data.get_temperature().at(g_idx_p) = getStateVar(m_integ->solution(),en_temperature,g_idx_p);
+   data.get_temperature().at(0)   = m_bulk_temperature;
+   if (m_with_energy){
+      for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+         data.get_temperature().at(g_idx_p+1) = getStateVar(m_integ->solution(),en_temperature,g_idx_p);
+      }
    }
 }
 
@@ -578,8 +603,9 @@ void ImplicitSurfChem_wc::get_state_object(wcdata& data){
 
    m_gas_phase->getMassFractions(&m_temp_vol_massfraction.front());
    for (int nc=0;nc<m_vol_sp;++nc){
+      data.get_vol_massfractions().at((m_nx+1)*nc) = m_temp_vol_massfraction[nc];
       for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
-         data.get_vol_massfractions().at(m_nx*nc+g_idx_p) = m_temp_vol_massfraction[nc];
+         data.get_vol_massfractions().at((m_nx+1)*nc+g_idx_p+1) = m_temp_vol_massfraction[nc];
       }
    }
 
@@ -591,7 +617,7 @@ void ImplicitSurfChem_wc::get_state_object(wcdata& data){
    }
 
    double temperature = m_gas_phase->temperature();
-   for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+   for(int g_idx_p=0;g_idx_p<m_nx+1;++g_idx_p){
       data.get_temperature().at(g_idx_p) = temperature;
    }
 }
@@ -601,21 +627,23 @@ void ImplicitSurfChem_wc::set_state(double* state, const wcdata& data){
    double temp_value;
    for (int nc=0;nc<m_vol_sp;++nc){
       for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
-         temp_value = data.get_vol_massfractions().at(m_nx*nc+g_idx_p);
+         temp_value = std::max(0.0,std::min(1.0,data.get_vol_massfractions().at((m_nx+1)*nc+g_idx_p+1)));
          setStateVar(state,temp_value,en_vol_comp[nc],g_idx_p);
       }
    }
 
    for (int nc=0;nc<m_surf_sp;++nc){
       for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
-         temp_value = data.get_surf_massfractions().at(m_nx*nc+g_idx_p);
+         temp_value = std::max(0.0,std::min(1.0,data.get_surf_massfractions().at(m_nx*nc+g_idx_p)));
          setStateVar(state,temp_value,en_surf_comp[nc],g_idx_p);
       }
    }
 
-   for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
-         temp_value = data.get_temperature().at(g_idx_p);
-         setStateVar(state,temp_value,en_temperature,g_idx_p);
+   if (m_with_energy){
+      for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+            temp_value = data.get_temperature().at(g_idx_p+1);
+            setStateVar(state,temp_value,en_temperature,g_idx_p);
+      }
    }
 
 }
@@ -625,7 +653,6 @@ void ImplicitSurfChem_wc::set_wcdata(wcdata* wc_data_obj){
 }
 
 void ImplicitSurfChem_wc::get_fluxes(double* y){
-   y = &m_fluxes_return.front();
    for (int nc=0;nc<m_vol_sp;++nc){
       y[nc] = m_fluxes[nc][0];
    }

@@ -113,7 +113,7 @@ public:
      *  @param t0  Initial Time -> this is an input
      *  @param t1  Final Time -> This is an input
      */
-    void integrate(doublereal t0, doublereal t1);
+    void integrate(doublereal t0, doublereal t1, int maxiter);
 
 
     //! Integrate from t0 to t1 without reinitializing the integrator.
@@ -312,6 +312,7 @@ protected:
     // Number of variables for the
     // ODE solver (gridpoints *variables)
     int m_nvars;
+    double m_small = 1E-50;
 
 
     // Type for the variable enumerations

@@ -147,9 +147,10 @@ void ImplicitSurfChem_masstransfer::initialize(doublereal t0)
 /*
  *  Set masstransfer coefficient
  */
-void ImplicitSurfChem_masstransfer::set_masstransfer_coefficient(doublereal h)
+void ImplicitSurfChem_masstransfer::set_masstransfer_coefficient(doublereal h,doublereal wc_geo_area)
 {
     m_masstransfer_coefficient = h;
+    m_wc_geo_area = wc_geo_area;
 }
 
 void ImplicitSurfChem_masstransfer::set_transport(Transport* t)
@@ -211,9 +212,12 @@ void ImplicitSurfChem_masstransfer::eval(doublereal time, doublereal* y,
     updateState(y);   // synchronize the surface state(s) with y
     doublereal rs0, sum;
     size_t loc, kstart;
+    doublereal site_density_save = 0.0;
     double Sc;
     for (size_t n = 0; n < m_nsurf; n++) {
-        rs0 = 1.0/m_surf[n]->siteDensity();
+        site_density_save = m_surf[n]->siteDensity();
+        m_surf[n]->setSiteDensity(site_density_save*m_wc_geo_area);
+        rs0 = 1.0/(m_surf[n]->siteDensity());
         m_vecKinPtrs[n]->getNetProductionRates(DATA_PTR(m_work));
         kstart = m_vecKinPtrs[n]->kineticsSpeciesIndex(0,m_surfindex[n]);
         sum = 0.0;
@@ -229,12 +233,12 @@ void ImplicitSurfChem_masstransfer::eval(doublereal time, doublereal* y,
             Sc = m_transport->viscosity() /m_bulkPhases[n]->density() / m_diff_coeffs.at(n)[k];
             ydot[k + m_nsp_surf[n] +  loc] = m_work[k] * m_bulkPhases[n]->molecularWeight(k)
                           / m_bulkPhases[n]->density() 
-                         - m_masstransfer_coefficient * pow(Sc,1.0/3.0)
-                                                      * m_diff_coeffs.at(n)[k]
+                         - m_masstransfer_coefficient * m_diff_coeffs.at(n)[k]
                                                       * (y[k+m_nsp_surf[n]] - 
                                                          m_bulk_massfraction[n][k]) ;
         }
         loc += m_nsp_tot[n];
+        m_surf[n]->setSiteDensity(site_density_save);
     }
 }
 

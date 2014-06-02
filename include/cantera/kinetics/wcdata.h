@@ -34,11 +34,11 @@ public:
 
    const grid_vec& get_vol_massfractions() const;
 
-   void write_data() const;
+   void write_data(int ii, double x_coord,int proc) const;
 
 
 protected:
-grid_vec m_vol_massfractions;
+   grid_vec m_vol_massfractions;
    grid_vec m_surf_massfractions;
    grid_vec m_temperature;
    int m_vol_sp;

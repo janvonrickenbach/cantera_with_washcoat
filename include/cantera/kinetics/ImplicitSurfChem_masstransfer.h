@@ -85,7 +85,7 @@ public:
      */
     virtual void initialize(doublereal t0 = 0.0);
 
-    virtual void set_masstransfer_coefficient(doublereal h);
+    virtual void set_masstransfer_coefficient(doublereal h,doublereal wc_geo_area);
     virtual void set_transport(Transport* t);
 
 
@@ -262,6 +262,7 @@ protected:
     vector_fp m_work;
 
     doublereal m_masstransfer_coefficient;
+    doublereal m_wc_geo_area;
 
 
 
