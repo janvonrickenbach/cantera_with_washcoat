@@ -246,16 +246,26 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
         for (int nc =0;nc<m_vol_sp;++nc){
            source = 0.0;
            source = (m_fluxes[nc][g_idx_p] - m_fluxes[nc][g_idx_p+1])/(dx+m_small);
+           if (source != source){
+              source = 0.0;
+           }
            source = source + m_temp_production_rates[nc]
                            * m_gas_phase->molecularWeight(nc)
                            * m_area_to_volume;
+           if(source != source){
+              source = 0.0;
+           }
            setStateVar(ydot,source,en_vol_comp[nc],g_idx_p);
         }
         for (int nc =0;nc<m_surf_sp;++nc){
            source = 0.0;
            source = source + m_temp_production_rates[nc+m_vol_sp]
-                            / m_surface_phase->siteDensity();
+                            / m_surface_phase->siteDensity()
+                            * m_area_to_volume* m_wc_thickness;
 
+           if(source != source){
+              source = 0.0;
+           }
            setStateVar(ydot,source,en_surf_comp[nc],g_idx_p);
         }
 
@@ -307,28 +317,22 @@ void ImplicitSurfChem_wc::createGrid(){
    m_x.resize(m_nx);
    m_dx.resize(m_nx);
    m_x_co.resize(m_nco-1);
-   m_fx.resize(m_nx_var);
+   m_fx.resize(m_nco);
 
    grid_vector::iterator vec_it;
    grid_vector::iterator vec_it_co;
    grid_vector::iterator vec_it_dx;
+   grid_vector::iterator vec_it_x;
 
+   double ratio = 1.2;
+   double current_dx = m_wc_thickness *(1-ratio)/(1-pow(ratio,m_nx));
    for(vec_it  = m_dx.begin();
       vec_it != m_dx.end();
       ++vec_it){
-      *vec_it = m_wc_thickness / m_nx;
+      *vec_it = current_dx;
+      current_dx *= ratio;
    }
 
-   //compute interpolation coeffcient in every cell
-
-   for(vec_it  = m_fx.begin();
-       vec_it != m_fx.end();
-       ++vec_it){
-      *vec_it = 0.5;
-   }
-
-   m_fx[0] = 1.0;
-   m_fx[m_nx_var-1] = 1.0;
 
    // Get the corner values
    std::partial_sum(m_dx.begin(),m_dx.end(),m_x_co.begin());
@@ -344,6 +348,12 @@ void ImplicitSurfChem_wc::createGrid(){
    }
    m_x.insert(m_x.begin(),0.0);
    m_x.push_back(m_x_co.back());
+
+   //compute interpolation coeffcient in every cell
+
+   for(int idx=0;idx<m_nco;++idx){
+      m_fx[idx] = (m_x[idx+1] - m_x_co[idx])/(m_x[idx+1]-m_x[idx]);
+   }
 }
 
 void ImplicitSurfChem_wc::printGrid(){
