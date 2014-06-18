@@ -1078,7 +1078,7 @@ int CVode(void *cvode_mem, real tout, N_Vector yout, real *t, int itask)
     /* Check for too many steps */
     
     if (nstloc >= mxstep) {
-      //fprintf(errfp, MSG_MAX_STEPS, tn, mxstep, tout);
+      fprintf(errfp, MSG_MAX_STEPS, tn, mxstep, tout);
       istate = TOO_MUCH_WORK;
       *t = tn;
       N_VScale(ONE, zn[0], yout);
@@ -1088,7 +1088,7 @@ int CVode(void *cvode_mem, real tout, N_Vector yout, real *t, int itask)
     /* Check for too much accuracy requested */
 
     if ((tolsf = uround * N_VWrmsNorm(zn[0], ewt)) > ONE) {
-      //fprintf(errfp, MSG_TOO_MUCH_ACC, tn);
+      fprintf(errfp, MSG_TOO_MUCH_ACC, tn);
       istate = TOO_MUCH_ACC;
       *t = tn;
       N_VScale(ONE, zn[0], yout);
@@ -1100,8 +1100,8 @@ int CVode(void *cvode_mem, real tout, N_Vector yout, real *t, int itask)
 
     if (tn + h == tn) {
       nhnil++;
-      //if (nhnil <= mxhnil) fprintf(errfp, MSG_HNIL, tn, h);
-      //if (nhnil == mxhnil) fprintf(errfp, MSG_HNIL_DONE, mxhnil);
+      if (nhnil <= mxhnil) fprintf(errfp, MSG_HNIL, tn, h);
+      if (nhnil == mxhnil) fprintf(errfp, MSG_HNIL_DONE, mxhnil);
     }
 
     /* Call CVStep to take a step */
@@ -1203,7 +1203,7 @@ int CVodeDky(void *cvode_mem, real t, int k, N_Vector dky)
   }
 
   if ((k < 0) || (k > q)) {
-    //fprintf(errfp, MSG_BAD_K, k);
+    fprintf(errfp, MSG_BAD_K, k);
     return(BAD_K);
   }
   
@@ -1211,7 +1211,7 @@ int CVodeDky(void *cvode_mem, real t, int k, N_Vector dky)
   tp = tn - hu - tfuzz;
   tn1 = tn + tfuzz;
   if ((t-tp)*(t-tn1) > ZERO) {
-    //fprintf(errfp, MSG_BAD_T, t, tn-hu, tn);
+    fprintf(errfp, MSG_BAD_T, t, tn-hu, tn);
     return(BAD_T);
   }
 
@@ -2611,11 +2611,15 @@ static int CVHandleFailure(CVodeMem cv_mem, int kflag)
   N_VAbs(tempv, tempv);
 
   /* Depending on kflag, print error message and return error flag */
-    switch (kflag) {
-    case REP_ERR_FAIL:  return(ERR_FAILURE);
-    case REP_CONV_FAIL: return(CONV_FAILURE);
-    case SETUP_FAILED:  return(SETUP_FAILURE);
-    case SOLVE_FAILED:  return(SOLVE_FAILURE);
+  switch (kflag) {
+    case REP_ERR_FAIL:  fprintf(errfp, MSG_ERR_FAILS, tn, h);
+                        return(ERR_FAILURE);
+    case REP_CONV_FAIL: fprintf(errfp, MSG_CONV_FAILS, tn, h);
+                        return(CONV_FAILURE);
+    case SETUP_FAILED:  fprintf(errfp, MSG_SETUP_FAILED, tn);
+                        return(SETUP_FAILURE);
+    case SOLVE_FAILED:  fprintf(errfp, MSG_SOLVE_FAILED, tn);
+                        return(SOLVE_FAILURE);
   }
   return -1;
 }

@@ -1375,22 +1375,27 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
 
 	// Create an wcdata object with the state of the kinetics object
 	wcdata* wcdata_bulk = new wcdata(m_integrator_wc);
-        try{
-           m_integrator_wc->set_bulk_from_state();
-           m_integrator_wc->set_wcdata(wcdata_bulk);
-           m_integrator_wc->initialize();
-           m_integrator_wc->integrate(0.0, 100000,100000);
-           m_integrator_wc->set_state_from_bulk();
-           m_integrator_wc->get_state(*wcdata_bulk);
-        }
-        catch (CanteraError& e){
-           e.getMessage();
-           m_integrator_wc->set_state_from_bulk();
-           m_integrator_wc->get_state(*wcdata_bulk);
-           //m_integrator_wc->get_state(*wcdata_bulk);
-        }
+	int tries = 0;
+	while (tries < 10)
+      try{
+         m_integrator_wc->set_bulk_from_state();
+         m_integrator_wc->set_wcdata(wcdata_bulk);
+         m_integrator_wc->initialize();
+         m_integrator_wc->integrate(0.0, 1E6,10000000);
+         m_integrator_wc->set_state_from_bulk();
+         m_integrator_wc->get_state(*wcdata_bulk);
+         m_integrator_wc->set_state_from_bulk();
+         tries = 10;
+      }
+      catch (CanteraError& e){
+         Cantera::showErrors();
+         m_integrator_wc->set_state_from_bulk();
+         m_integrator_wc->get_state(*wcdata_bulk);
+         //m_integrator_wc->get_state(*wcdata_bulk);
+         tries ++;
+      }
 
-	// Create a container and use the wcdata_bulk state for all of them
+	//create a container and use the wcdata_bulk state for all of them
 	m_wc_container  = new wcdata_container(istorf,m_integrator_wc,wcdata_bulk);
 	delete wcdata_bulk;
 

@@ -62,7 +62,7 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
     // use backward differencing, with a full Jacobian computed
     // numerically, and use a Newton linear iterator
     m_integ->setMethod(BDF_Method);
-    m_integ->setProblemType(DENSE + NOJAC);
+    m_integ->setProblemType(GMRES);
     m_integ->setIterator(Newton_Iter);
 
     if (k->nPhases() > 2){
@@ -189,9 +189,11 @@ void ImplicitSurfChem_wc::reinitialize(doublereal t0)
  */
 void ImplicitSurfChem_wc::integrate(doublereal t0, doublereal t1,int maxsteps)
 {
-    m_integ->initialize(t0, *this);
     m_integ->setMaxStepSize(t1 - t0);
+    m_integ->setMaxStepSize(100*t1/maxsteps);
     m_integ->setMaxSteps(maxsteps);
+    m_integ->initialize(t0, *this);
+//    m_integ->setMaxOrder(1);
     m_integ->integrate(t1);
 }
 
@@ -222,6 +224,10 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
    update_material_properties(y);
    double dx;
 
+//   for (int idx_full =0;idx_full<neq();++idx_full)
+//   {
+//      if (y[idx_full] < 0.0) return -1;
+//   }
 
     for (int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
       dx = m_x_co[g_idx_p+1] - m_x_co[g_idx_p];
@@ -297,6 +303,11 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
         // Taking into account the thermal inertia of the solid
         source = source/(1E6*dx);
         setStateVar(ydot,source,en_temperature,g_idx_p);
+//        double res_sum = 0.0;
+//        for (int state_idx=0;state_idx < m_nvars; state_idx++){
+//           res_sum += std::abs(ydot[state_idx]/y[state_idx]);
+//        }
+//        cout << res_sum;
       }
    }
 
@@ -635,19 +646,32 @@ void ImplicitSurfChem_wc::get_state_object(wcdata& data){
 
 void ImplicitSurfChem_wc::set_state(double* state, const wcdata& data){
    double temp_value;
-   for (int nc=0;nc<m_vol_sp;++nc){
-      for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+   double sum_val = 0.0;
+   for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+      sum_val = 0.0;
+      for (int nc=0;nc<m_vol_sp;++nc){
          temp_value = std::max(0.0,std::min(1.0,data.get_vol_massfractions().at((m_nx+1)*nc+g_idx_p+1)));
+         sum_val += temp_value;
+      }
+      for (int nc=0;nc<m_vol_sp;++nc){
+         temp_value = std::max(0.0,std::min(1.0,data.get_vol_massfractions().at((m_nx+1)*nc+g_idx_p+1)))/sum_val;
          setStateVar(state,temp_value,en_vol_comp[nc],g_idx_p);
       }
    }
 
-   for (int nc=0;nc<m_surf_sp;++nc){
-      for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+
+   for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+      sum_val = 0.0;
+      for (int nc=0;nc<m_surf_sp;++nc){
          temp_value = std::max(0.0,std::min(1.0,data.get_surf_massfractions().at(m_nx*nc+g_idx_p)));
+         sum_val += temp_value;
+      }
+      for (int nc=0;nc<m_surf_sp;++nc){
+         temp_value = std::max(0.0,std::min(1.0,data.get_surf_massfractions().at(m_nx*nc+g_idx_p)))/sum_val;
          setStateVar(state,temp_value,en_surf_comp[nc],g_idx_p);
       }
    }
+
 
    if (m_with_energy){
       for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){

@@ -194,8 +194,8 @@ public:
         doublereal th;
         for (size_t n = 0; n < m_ncov; n++) {
             k = m_sp[n];
-            m_acov += m_ac[n] * std::min(std::max(theta[k],0.0),1.0);
-            m_ecov += m_ec[n] * std::min(std::max(theta[k],0.0),1.0);
+            m_acov += m_ac[n] * theta[k];
+            m_ecov += m_ec[n] * theta[k];
         }
         for (size_t n = 0; n < m_nmcov; n++) {
             k = m_msp[n];
