@@ -17,6 +17,7 @@
 #include "cantera/thermo/SurfPhase.h"
 #include <iostream>
 #include <fstream>
+#include <cmath>
 
 namespace Cantera{
 // Constructor
@@ -30,7 +31,6 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
                                         ,int nx, bool with_energy):
     m_kin(k),
     m_transport(t),
-    m_wc_coefficient(h),
     m_wc_coefficient_temp(h_temp),
     m_wc_thickness(wc_thickness),
     m_nx(nx),
@@ -82,6 +82,8 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
     // Get number of species
     m_vol_sp  = m_gas_phase->nSpecies();
     m_surf_sp = k->nTotalSpecies() - m_vol_sp;
+
+    m_wc_coefficient.resize(m_vol_sp,h);
 
 
     // Allocate temporary arrays
@@ -471,8 +473,8 @@ void ImplicitSurfChem_wc::update_fluxes(double* state){
       }
       prefactor_inf = interpolate_values(m_fx[0],prefactor[0],prefactor[1]);
       prefactor_bulk = m_bulk_diff_coeffs[nc] * m_bulk_density
-                       * m_wc_coefficient * dx_inf;
-      prefactor_mix = prefactor_inf * m_bulk_density *m_wc_coefficient
+                       * m_wc_coefficient[nc] * dx_inf;
+      prefactor_mix = prefactor_inf * m_bulk_density *m_wc_coefficient[nc]
                        *m_bulk_diff_coeffs[nc];
 
       Y_1 = getStateVar(state,en_vol_comp[nc],0);
@@ -527,7 +529,7 @@ void ImplicitSurfChem_wc::update_material_properties(double* y){
        for (int nc =0;nc<m_vol_sp;++nc){
           m_temp_vol_massfraction[nc] = -m_fluxes[nc][0]/
                                      (m_bulk_diff_coeffs[nc]*
-                                      m_wc_coefficient * m_bulk_density +m_small)
+                                      m_wc_coefficient[nc] * m_bulk_density +m_small)
                                       + m_bulk_massfraction[nc];
        }
        if (m_with_energy){
@@ -693,6 +695,15 @@ void ImplicitSurfChem_wc::get_fluxes(double* y){
    if (m_with_energy){
       y[m_vol_sp] = m_fluxes_temp[0];
    }
+}
+
+void ImplicitSurfChem_wc::set_mt_coefficient(double Gz){
+  double loc_gz;
+  for (int nc=0;nc <m_vol_sp;++nc){
+    loc_gz = Gz * m_bulk_diff_coeffs[nc];
+    m_wc_coefficient[nc] = (3.675 + 8.827*std::pow((1000.*loc_gz),-0.545)
+                                  *std::exp(-48.2*loc_gz))*1000.0;
+  }
 }
 
 } // namespace Cantera

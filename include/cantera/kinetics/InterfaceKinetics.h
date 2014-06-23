@@ -511,7 +511,7 @@ public:
                            ,int nx
                            ,bool with_energy
                            ,int istorf);
-    void advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes, int maxiter);
+    void advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes, int maxiter,double gz);
     void write_wcdata(int iistr1_nb,int ii,double x_coord, int proc);
     void end_wcmodel();
     //! Solve for the pseudo steady-state of the surface problem

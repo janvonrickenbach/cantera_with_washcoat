@@ -1402,7 +1402,7 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
 
 }
 
-void InterfaceKinetics::advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes,int maxiter)
+void InterfaceKinetics::advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes,int maxiter,double gz)
 {
 
    wcdata* wc_data = m_wc_container->get_wcdata(iistr1_nb,ii);
@@ -1410,6 +1410,9 @@ void InterfaceKinetics::advanceCoverages_wc(doublereal tstep, int iistr1_nb,int 
       m_integrator_wc->set_bulk_from_state();
       m_integrator_wc->set_wcdata(wc_data);
       m_integrator_wc->initialize();
+      if (gz > 0.0){
+         m_integrator_wc->set_mt_coefficient(gz);
+      }
       m_integrator_wc->integrate(0.0, tstep,maxiter);
       m_integrator_wc->get_state(*wc_data);
       m_integrator_wc->get_fluxes(fluxes);

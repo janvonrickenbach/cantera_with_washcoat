@@ -182,6 +182,7 @@ public:
 	void set_wcdata(wcdata* wcdata);
 
    void get_fluxes(double* y);
+   void set_mt_coefficient(double Gz);
 
 
 protected:
@@ -267,7 +268,7 @@ protected:
     doublereal m_lambda_solid;
 
     // Bulk mass-transfer coefficient
-    doublereal m_wc_coefficient;
+    std::vector<doublereal> m_wc_coefficient;
 
     // Bulk heat-transfer coefficient
     doublereal m_wc_coefficient_temp;
