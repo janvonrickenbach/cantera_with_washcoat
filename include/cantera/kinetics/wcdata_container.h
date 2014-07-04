@@ -12,14 +12,14 @@
 
 namespace Cantera{
   class wcdata;
-  class ImplicitSurfChem_wc;
+  class SingleWc;
 }
 
 namespace Cantera{
 
 class wcdata_container {
 public:
-	wcdata_container(int istorf, Cantera::ImplicitSurfChem_wc* integ,wcdata* data);
+	wcdata_container(int istorf, Cantera::SingleWc* integ,wcdata* data);
 
 	wcdata* get_wcdata(int iistr1_nb,int ii);
 	void set_wcdata(int iistr1_nb,int ii,wcdata* data);

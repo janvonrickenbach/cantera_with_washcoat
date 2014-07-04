@@ -54,7 +54,7 @@ public:
     virtual void setProblemType(int probtype);
     virtual void initialize(double t0, FuncEval& func);
     virtual void reinitialize(double t0, FuncEval& func);
-    virtual void integrate(double tout);
+    virtual void integrate(double& tout,double tin);
     virtual doublereal step(double tout);
     virtual double& solution(size_t k);
     virtual double* solution();
@@ -85,6 +85,9 @@ public:
     //! This information can be used to identify which variables are
     //! responsible for integrator failures or unexpected small timesteps.
     virtual std::string getErrorInfo(int N);
+    double getCurrentTime(){
+       return m_time;
+    }
 
 protected:
 

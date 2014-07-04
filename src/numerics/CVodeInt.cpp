@@ -259,6 +259,8 @@ void CVodeInt::initialize(double t0, FuncEval& func)
     } else {
         throw CVodeErr("unsupported option");
     }
+
+
 }
 
 
@@ -307,11 +309,11 @@ void CVodeInt::reinitialize(double t0, FuncEval& func)
     }
 }
 
-void CVodeInt::integrate(double tout)
+void CVodeInt::integrate(double& tout, double tin)
 {
-    double t;
     int flag;
-    flag = CVode(m_cvode_mem, tout, nv(m_y), &t, NORMAL);
+    flag = CVode(m_cvode_mem, tout, nv(m_y), &tin, NORMAL);
+    tout = tin;
     if (flag != SUCCESS) {
         throw CVodeErr(" CVode error encountered. Error code: " + int2str(flag));
     }

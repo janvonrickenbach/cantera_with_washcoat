@@ -35,6 +35,7 @@ using namespace std;
 #include "cvodes/cvodes_diag.h"
 #include "cvodes/cvodes_spgmr.h"
 #include "cvodes/cvodes_band.h"
+#include "cvodes/cvodes_bandpre.h"
 
 #else
 #error unsupported Sundials version!
@@ -454,7 +455,12 @@ void CVodesIntegrator::applyOptions()
     } else if (m_type == DIAG) {
         CVDiag(m_cvode_mem);
     } else if (m_type == GMRES) {
-        CVSpgmr(m_cvode_mem, PREC_NONE, 0);
+        long int N = m_neq;
+        long int nu = m_mupper;
+        long int nl = m_mlower;
+        CVSpgmr(m_cvode_mem, PREC_LEFT, 0);
+        CVBandPrecInit(m_cvode_mem, N, nu, nl);
+
     } else if (m_type == BAND + NOJAC) {
         long int N = m_neq;
         long int nu = m_mupper;
@@ -481,9 +487,10 @@ void CVodesIntegrator::applyOptions()
     }
 }
 
-void CVodesIntegrator::integrate(double tout)
+void CVodesIntegrator::integrate(double& tout, double tin)
 {
     int flag = CVode(m_cvode_mem, tout, m_y, &m_time, CV_NORMAL);
+    tout = m_time;
     if (flag != CV_SUCCESS) {
         throw CVodesErr(" CVodes error encountered. Error code: " + int2str(flag) +
                         "\nComponents with largest weighted error estimates:\n" + getErrorInfo(10));

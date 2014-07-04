@@ -25,6 +25,7 @@ class SurfPhase;
 class Transport;
 class ThermoPhase;
 class wcdata;
+class SingleWc;
 
 
 //! Advances the surface coverages of the associated set of SurfacePhase
@@ -85,7 +86,9 @@ public:
     		           ,double porosity, double tortuosity
     		           ,double d_p, double lambda_solid
     		           ,double atol, double rtol
-		               ,int nx,bool with_energy);
+		               ,int nx,bool with_energy, int cells_x
+		              ,double L_r, double vel, double dt, double A_V,bool from_file, int maxsteps
+		              ,double mintemp, double maxtemp, double trate);
 
     /**
      * Destructor. Deletes the integrator.
@@ -113,7 +116,7 @@ public:
      *  @param t0  Initial Time -> this is an input
      *  @param t1  Final Time -> This is an input
      */
-    void integrate(doublereal t0, doublereal t1, int maxiter);
+    void integrate(doublereal& t0, doublereal t1, int maxiter);
 
 
     //! Integrate from t0 to t1 without reinitializing the integrator.
@@ -140,222 +143,30 @@ public:
     virtual void eval(doublereal t, doublereal* y, doublereal* ydot,
                       doublereal* p);
 
+    void set_bulk_temperature(double temperature);
+
     // This is called by the CVODE integrator in the beginning
     // to initialize the state vector
     void getInitialConditions(doublereal t0, size_t lenc,doublereal* c);
 
     // Returns the length of the state vector. Called by CVODE
-    size_t neq() {return m_nvars*m_nx;}
+    size_t neq();
+    void write_wc(int step);
+    Integrator* m_integ;
 
-
-    // Writes all the variables to file
-    void printGrid();
-
-    // Initialize the bulk values from the state of
-    // m_gas_phase
-    void set_bulk_from_state();
-
-	// Reset the state of m_gas_phase to
-	// the bulk state
-	void set_state_from_bulk();
-
-	//Getters
-	int get_nx() const {
-		return m_nx;
-	}
-
-	int get_vol_sp() const {
-		return m_vol_sp;
-	}
-
-	int get_surf_sp() const {
-		return m_surf_sp;
-	}
-
-
-	// Get the state from a wcdata object
-	void get_state(wcdata& data) const;
-	void get_state_object(wcdata& data);
-	// Set the state from to wcdata object
-	void set_state(double* state, const wcdata& data);
-
-	void set_wcdata(wcdata* wcdata);
-
-   void get_fluxes(double* y);
-   void set_mt_coefficient(double Gz);
 
 
 protected:
 
 
 
-    // Type to store varialbes that exist in every cell
-	// for a number of components
-    typedef std::vector<std::vector<double> > comp_vector;
-
-    // Type for scalar variables on the grid
-    typedef std::vector<double> grid_vector;
-
-
-    // Bulk Values
-    std::vector<doublereal> m_bulk_massfraction;
-    std::vector<doublereal> m_bulk_diff_coeffs;
-    doublereal m_bulk_diff_temp;
-    doublereal m_bulk_density;
-    doublereal m_bulk_temperature;
-    doublereal m_bulk_pressure;
-
-    // Fluxes for the species
-    comp_vector m_fluxes;
-
-    // Fluxes for the energy equation
-    std::vector<doublereal> m_fluxes_temp;
-
-    // Thermal conductivity for temperature
-    std::vector<doublereal> m_diff_temp;
-
-    // Temporary arrays for species
-    std::vector<doublereal> m_temp_vol_massfraction;
-    std::vector<doublereal> m_temp_diff_coeffs;
-    std::vector<doublereal> m_temp_surf_massfraction;
-
-    // Temporary arrays for species production rates
-    std::vector<doublereal> m_temp_production_rates;
-    // Temporary reaction rates
-    std::vector<doublereal> m_temp_rates_of_progress;
-    // Temporary arrays for reaction enthalpy
-    std::vector<doublereal> m_temp_delta_enthalpy;
-
-    // Number of cell centers
-    int m_nx;
-
-    // Number of cell corners
-    int m_nco;
-
-    // Number of cell centers +2
-    // Includes values at the boundary
-    int m_nx_var;
-
-    // Corner coordinates
-    grid_vector m_x_co;
-
-    // Cell center coordinates
-    // includes the coordinates of the two boundaries
-    grid_vector m_x;
-
-    // Dx values for all the cells
-    grid_vector m_dx;
-
-    // Interpolation coefficients
-    grid_vector m_fx;
-
-    // Washcoat thickness
-    doublereal m_wc_thickness;
-
-    // Area to volume ratio
-    doublereal m_area_to_volume;
-
-    // Washcoat pore diameter
-    doublereal m_dp;
-
-    // Washcoat porostiy
-    doublereal  m_porosity;
-
-    // Washcoat tortuosity
-    doublereal m_tortuosity;
-
-    // Washcoat solid conductivity
-    doublereal m_lambda_solid;
-
-    // Bulk mass-transfer coefficient
-    std::vector<doublereal> m_wc_coefficient;
-
-    // Bulk heat-transfer coefficient
-    doublereal m_wc_coefficient_temp;
-
-    // Density at each grid point including boundaries
-    grid_vector m_rho;
-
-    // Diffusion Coefficients at each grid point including boundaries
-    comp_vector m_diff_coeffs;
-
-    // Pointer to transport manager
-    Transport* m_transport;
-
-    // Pointer to gas phase
-    ThermoPhase* m_gas_phase;
-
-    // Pointer to surface phase
-    SurfPhase* m_surface_phase;
-
-    // Pointer to interface kinetics object
-    InterfaceKinetics* m_kin;
-
-    // Pointer wcdata object
-    wcdata* m_wc_data;
-
     //! Pointer to the cvode integrator
-    Integrator* m_integ;
     doublereal m_atol, m_rtol;   // tolerances
     doublereal m_maxstep;        // max step size
 
+    int m_cells_x;
+    std::vector<SingleWc*> wc_list;
 
-    std::vector<doublereal> m_fluxes_return;
-
-    // Number of volume species
-    int m_vol_sp;
-
-    // Number of surface species
-    int m_surf_sp;
-
-    bool m_with_energy;
-
-    // Number of variables for the
-    // ODE solver (gridpoints *variables)
-    int m_nvars;
-    double m_small = 1E-50;
-
-
-    // Type for the variable enumerations
-    // en_start makes sure they start at zero
-    enum vars_enum{en_start=0};
-
-    std::vector<vars_enum> en_vol_comp;
-    std::vector<vars_enum> en_surf_comp;
-    vars_enum en_temperature;
-
-    // Takes a state vector gets the value of var at grid point
-    // loc_idx
-    // loc_idx is the index in the state vector, which means boundary
-    // points are not included
-	doublereal getStateVar(double* state,vars_enum var,int loc_idx) const;
-
-    // Takes a state vector sets value of var at grid point
-    // loc_idx
-    // loc_idx is the index in the state vector, which means boundary
-	// points are not included
-	void setStateVar(double* state,double value,vars_enum var,int loc_idx);
-
-	// Creates the grid. This routine takes nx and wc_thickness
-	// and buids a grid. It set the corner coordinates and the
-	// interpolation cofficinets for the faces
-	void createGrid();
-
-    // Updated the fluxes for all the species and the energy equation
-	void update_fluxes(double* state);
-
-    // Uses the interpolation coefficients to interpolate the
-	// input values th a cell phase
-	double interpolate_values(double fxp,double val,double valw);
-
-	// Writes a single variable to a file myfile
-	// The vector should have length m_nx_var
-	void write_var(std::ofstream& myfile,const std::vector<double>& vec);
-
-	// Updates the material properties
-	// Diffusion coefficient, conductivity, density
-	// Currently sets it to the bulk state
-   void update_material_properties(double* y);
 
 
 };

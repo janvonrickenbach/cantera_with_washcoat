@@ -44,7 +44,7 @@ public:
     virtual void setProblemType(int probtype);
     virtual void initialize(double t0, FuncEval& func);
     virtual void reinitialize(double t0, FuncEval& func);
-    virtual void integrate(double tout);
+    virtual void integrate(double& tout, double tin);
     virtual doublereal step(double tout);
     virtual double& solution(size_t k);
     virtual double* solution();

@@ -165,6 +165,8 @@ cdef extern from "cantera/kinetics/InterfaceKinetics.h":
     cdef cppclass CxxInterfaceKinetics "Cantera::InterfaceKinetics":
         void advanceCoverages(double) except +
 
+        void initialize_wcmodel(CxxTransport*, double,double,double,double,double,double,double,double,double,double,int,cbool,int,int,double,double,double,double,int,double,cbool,int,double,double,double) 
+
 
 cdef extern from "cantera/transport/TransportFactory.h":
     cdef string transportModelName "Cantera::TransportFactory::modelName" (int)

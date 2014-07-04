@@ -152,7 +152,7 @@ void ReactorNet::advance(doublereal time)
         }
         initialize();
     }
-    m_integ->integrate(time);
+    m_integ->integrate(time,0.0);
     m_time = time;
     updateState(m_integ->solution());
 }

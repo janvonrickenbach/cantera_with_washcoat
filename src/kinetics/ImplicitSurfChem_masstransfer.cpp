@@ -170,7 +170,7 @@ void ImplicitSurfChem_masstransfer::integrate(doublereal t0, doublereal t1)
 {
     m_integ->initialize(t0, *this);
     m_integ->setMaxStepSize(t1 - t0);
-    m_integ->integrate(t1);
+    m_integ->integrate(t1,t0);
     updateState(m_integ->solution());
 }
 
@@ -184,8 +184,9 @@ void ImplicitSurfChem_masstransfer::integrate(doublereal t0, doublereal t1)
  *  @param t1  Final Time -> This is an input
  */
 void ImplicitSurfChem_masstransfer::integrate0(doublereal t0, doublereal t1)
+
 {
-    m_integ->integrate(t1);
+    m_integ->integrate(t1,t0);
     updateState(m_integ->solution());
 }
 

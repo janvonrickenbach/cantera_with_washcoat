@@ -151,7 +151,7 @@ void ImplicitSurfChem::integrate(doublereal t0, doublereal t1)
 {
     m_integ->initialize(t0, *this);
     m_integ->setMaxStepSize(t1 - t0);
-    m_integ->integrate(t1);
+    m_integ->integrate(t1,t0);
     updateState(m_integ->solution());
 }
 
@@ -166,7 +166,7 @@ void ImplicitSurfChem::integrate(doublereal t0, doublereal t1)
  */
 void ImplicitSurfChem::integrate0(doublereal t0, doublereal t1)
 {
-    m_integ->integrate(t1);
+    m_integ->integrate(t1,t0);
     updateState(m_integ->solution());
 }
 

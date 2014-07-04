@@ -510,7 +510,11 @@ public:
                            ,doublereal rtol
                            ,int nx
                            ,bool with_energy
-                           ,int istorf);
+                           ,int istorf, int x_cells, double L_r
+                           ,double vel, double dt, double A_V
+                           ,int n_output, double temperature
+                           ,bool from_file, int maxiter,double mintemp, double maxtemp, double trate);
+
     void advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes, int maxiter,double gz);
     void write_wcdata(int iistr1_nb,int ii,double x_coord, int proc);
     void end_wcmodel();

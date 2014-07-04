@@ -121,7 +121,7 @@ public:
      * @param tout Integrate to this time. Note that this is the
      *             absolute time value, not a time interval.
      */
-    virtual void integrate(doublereal tout) {
+    virtual void integrate(doublereal& tout, doublereal tin) {
         warn("integrate");
     }
 
@@ -204,6 +204,10 @@ public:
 
     virtual double sensitivity(size_t k, size_t p) {
         warn("sensitivity");
+        return 0.0;
+    }
+    virtual double getCurrentTime() {
+        warn("getCurrentTime");
         return 0.0;
     }
 

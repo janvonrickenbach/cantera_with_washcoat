@@ -1368,69 +1368,44 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
                                          ,doublereal rtol
                                          ,int nx
                                          ,bool with_energy
-                                         ,int istorf){
+                                         ,int istorf, int cells_x
+                                         ,double L_r, double vel, double dt, double A_V,int n_output,double temperature, bool from_file, int maxsteps
+                                         ,double mintemp, double maxtemp, double trate){
 
    m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity,d_p
-                                            ,lambda_solid,atol,rtol,nx,with_energy);
+                                            ,lambda_solid,atol,rtol,nx,with_energy,cells_x,L_r,vel,dt,A_V,from_file,maxsteps
+                                            ,mintemp,maxtemp,trate);
 
 	// Create an wcdata object with the state of the kinetics object
-	wcdata* wcdata_bulk = new wcdata(m_integrator_wc);
-	int tries = 0;
-	while (tries < 10)
+	double time = 0.0;
+	double target_time = dt/n_output;
+	double tout;
+   m_integrator_wc->initialize();
+	while (time < dt)
       try{
-         m_integrator_wc->set_bulk_from_state();
-         m_integrator_wc->set_wcdata(wcdata_bulk);
-         m_integrator_wc->initialize();
-         m_integrator_wc->integrate(0.0, 1E6,10000000);
-         m_integrator_wc->set_state_from_bulk();
-         m_integrator_wc->get_state(*wcdata_bulk);
-         m_integrator_wc->set_state_from_bulk();
-         tries = 10;
+         m_integrator_wc->write_wc(-1);
+//       m_integrator_wc->set_bulk_temperature(temperature);
+         m_integrator_wc->integrate(time, target_time,0);
+//         m_integrator_wc->integrate(0.0, dt/n_output,0);
+         target_time += dt/n_output;
+         m_integrator_wc->write_wc(int(time));
+         std::cout << time << " " << target_time << std::endl;
       }
       catch (CanteraError& e){
          Cantera::showErrors();
-         m_integrator_wc->set_state_from_bulk();
-         m_integrator_wc->get_state(*wcdata_bulk);
-         //m_integrator_wc->get_state(*wcdata_bulk);
-         tries ++;
+         time = m_integrator_wc->m_integ->getCurrentTime();
+         m_integrator_wc->write_wc(int(time));
+         std::cout << time << " " << target_time << std::endl;
       }
-
-	//create a container and use the wcdata_bulk state for all of them
-	m_wc_container  = new wcdata_container(istorf,m_integrator_wc,wcdata_bulk);
-	delete wcdata_bulk;
-
 
 }
 
-void InterfaceKinetics::advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes,int maxiter,double gz)
-{
-
-   wcdata* wc_data = m_wc_container->get_wcdata(iistr1_nb,ii);
-    try{
-      m_integrator_wc->set_bulk_from_state();
-      m_integrator_wc->set_wcdata(wc_data);
-      m_integrator_wc->initialize();
-      if (gz > 0.0){
-         m_integrator_wc->set_mt_coefficient(gz);
-      }
-      m_integrator_wc->integrate(0.0, tstep,maxiter);
-      m_integrator_wc->get_state(*wc_data);
-      m_integrator_wc->get_fluxes(fluxes);
-      m_integrator_wc->set_state_from_bulk();
-    }
-    catch (CanteraError& e){
-       Cantera::showErrors();
-       m_integrator_wc->get_state(*wc_data);
-       m_integrator_wc->get_fluxes(fluxes);
-       m_integrator_wc->set_state_from_bulk();
-    }
-}
 
 void InterfaceKinetics::write_wcdata(int iistr1_nb,int ii,double x_coord, int proc)
 {
 
    wcdata* wc_data = m_wc_container->get_wcdata(iistr1_nb,ii);
-   wc_data->write_data(iistr1_nb+ii,x_coord,proc);
+   wc_data->write_data(iistr1_nb+ii,x_coord);
 }
 
 void InterfaceKinetics::end_wcmodel(){
