@@ -53,7 +53,10 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
     m_integ->setIterator(Newton_Iter);
     m_integ->setMaxSteps(maxsteps);
     m_integ->setMaxErrTestFails(100);
-    m_integ->setBandwidth(k->nTotalSpecies(),k->nTotalSpecies());
+    int bandwidth =  k->nTotalSpecies();
+    if (with_energy) bandwidth += 1;
+    m_integ->setBandwidth(bandwidth,bandwidth);
+//    m_integ->setMaxOrder(1);
     for (int cell_idx=0;cell_idx < m_cells_x;++cell_idx){
        wc_list.push_back(new SingleWc(this,k,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity
                ,d_p,lambda_solid,nx,with_energy,cell_idx,cells_x,L_r,vel,A_V,from_file,mintemp,maxtemp,trate));

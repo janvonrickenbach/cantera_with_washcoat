@@ -49,8 +49,10 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
       // Initialize the grid
       createGrid();
 
+      // always atmospheric pressure
       m_bulk_pressure = 1E5;
 
+      // Not more than tow phases allowed
       if (k->nPhases() > 2){
          std::cout << "Error more than two phases" << std::endl;
       }
@@ -70,16 +72,15 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
       m_surf_sp = k->nTotalSpecies() - m_vol_sp;
 
 
+      // Initialize the inflow with the composition
+      // of the gas object
       m_inflow_comp.resize(m_vol_sp,0.0);
-
-      m_prefactor.resize(m_nx_var);
-
       m_gas_phase->getMassFractions(&m_inflow_comp.front());
- //     std::cout << m_gas_phase->report(true) << std::endl;
-//      std::cout << m_surface_phase->report(true);
+
 
 
       // Allocate temporary arrays
+      m_prefactor.resize(m_nx_var);
       m_temp_vol_massfraction.resize(m_vol_sp,0);
       m_temp_diff_coeffs.resize(m_vol_sp,0);
       m_temp_surf_coverages.resize(m_surf_sp,0);
@@ -90,7 +91,7 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
       m_bulk_diff_coeffs.resize(m_vol_sp,0);
 
 
-      // Initialize arrays related to energy
+      // Initialize arrays related to energy equation
       if (m_with_energy){
          m_temp_rates_of_progress.resize(m_kin->nReactions());
          m_temp_delta_enthalpy.resize(m_kin->nReactions());
@@ -114,23 +115,17 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
 
       // Set number of variables
       m_nvars = m_surf_sp + m_vol_sp;
-
       if (with_energy) m_nvars +=1;
-
 
       // Initialize fluxes arrays
       m_fluxes.resize(m_vol_sp);
-
-      m_fluxes_return.resize(m_vol_sp,0);
-      if (with_energy) m_fluxes_return.push_back(0);
-
       if (with_energy) m_fluxes_temp.resize(m_nco,0.0);
 
       comp_vector::iterator comp_iter;
       for (comp_iter =  m_fluxes.begin();
            comp_iter != m_fluxes.end();
            ++comp_iter){
-         comp_iter->resize(m_nco,0);
+         comp_iter->resize(m_nco,0.0);
       }
 
       // Initialize arrays for density and diffusion
@@ -144,15 +139,20 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
            ++comp_iter){
          comp_iter->resize(m_vol_sp);
       }
+
+      // Initialize from file or
+      // From object
       if (m_from_file){
         m_wcdata = new wcdata(this,m_x_idx,0);
       }else{
         m_wcdata = new wcdata(this);
       }
 
+      // Set masstransfer coefficient
       m_wc_coefficient.resize(m_vol_sp,h);
 
       m_update_temp = -1;
+      m_update_counter = 0;
 
    }
 
@@ -161,172 +161,129 @@ SingleWc::~SingleWc(){}
 void SingleWc::eval(doublereal time, doublereal* y,
                     doublereal* ydot, doublereal* p)
 {
+   double source = 0.0;
+   double dx = 0.0;
+
+   // Set bulk values
    for (int nc =0;nc<m_vol_sp;++nc){
-           m_bulk_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],0,m_x_idx);
+      m_bulk_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],0,m_x_idx);
    }
    if (m_with_energy){
       m_bulk_temperature  = getStateVar(y,en_temperature,0,m_x_idx);
    }
 
+   // Temperature rate
    if (m_mintemp > 0.0){
-     double deltat = (m_maxtemp-m_mintemp)/m_trate;
-     if (time < deltat){
-        m_bulk_temperature = m_mintemp+m_trate*time;
-     }else{
-        m_bulk_temperature = m_maxtemp-m_trate*(time-deltat);
-     }
+      double deltat = (m_maxtemp-m_mintemp)/m_trate;
+      if (time < deltat){
+         m_bulk_temperature = m_mintemp+m_trate*time;
+      }else{
+         m_bulk_temperature = m_maxtemp-m_trate*(time-deltat);
+      }
    }
-   double source = 0.0;
-   double temperature;
+
    update_fluxes(y);
    update_material_properties(y);
-   
-   double dx;
 
-
-    for (int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
+   for (int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
       dx = m_x_co[g_idx_p+1] - m_x_co[g_idx_p];
 
+      setCanterafromState(y,g_idx_p);
+      m_kin->getNetProductionRates(&m_temp_production_rates.front());
       for (int nc =0;nc<m_vol_sp;++nc){
-           m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],g_idx_p+1,m_x_idx);
-        }
-        for (int nc =0;nc<m_surf_sp;++nc){
-         m_temp_surf_coverages[nc] = getStateVar(y,en_surf_comp[nc],g_idx_p,m_x_idx);
-        }
+         source = 0.0;
+         source = (m_fluxes[nc][g_idx_p] - m_fluxes[nc][g_idx_p+1])/(dx+m_small);
 
-        if (m_with_energy) {
-           temperature = std::max(getStateVar(y,en_temperature,g_idx_p+1,m_x_idx),100.0);
-        } else{
-           temperature = m_bulk_temperature;
-        }
-        m_gas_phase->setState_TPY(temperature,m_bulk_pressure,&m_temp_vol_massfraction.front());
-        m_surface_phase->setMoleFractions(&m_temp_surf_coverages.front());
-        m_surface_phase->setTemperature(temperature);
-        m_kin->getNetProductionRates(&m_temp_production_rates.front());
+         if (source != source) source = 0.0;
 
-        for (int nc =0;nc<m_vol_sp;++nc){
-           source = 0.0;
-           source = (m_fluxes[nc][g_idx_p] - m_fluxes[nc][g_idx_p+1])/(dx+m_small);
-           if (source != source){
-              source = 0.0;
-           }
-           source = source + m_temp_production_rates[nc]
-                           * m_gas_phase->molecularWeight(nc)
-                           * m_area_to_volume;
-           if(source != source){
-              source = 0.0;
-           }
-           setStateVar(ydot,source,en_vol_comp[nc],g_idx_p+1,m_x_idx);
-        }
-        for (int nc =0;nc<m_surf_sp;++nc){
-           source = 0.0;
-           source = source + m_temp_production_rates[nc+m_vol_sp]
-                            / m_surface_phase->siteDensity();
-               //             * m_area_to_volume* m_wc_thickness;
+         source = source + m_temp_production_rates[nc]
+                         * m_gas_phase->molecularWeight(nc)
+                         * m_area_to_volume;
 
-           if(source != source){
-              source = 0.0;
-           }
-           setStateVar(ydot,source,en_surf_comp[nc],g_idx_p,m_x_idx);
-        }
+         if(source != source)source = 0.0;
+
+         setStateVar(ydot,source,en_vol_comp[nc],g_idx_p+1,m_x_idx);
+
+         for (int nc =0;nc<m_surf_sp;++nc){
+            source = 0.0;
+            source = source + m_temp_production_rates[nc+m_vol_sp]
+                             / m_surface_phase->siteDensity()
+                             * m_area_to_volume* m_wc_thickness;
+
+            if(source != source) source = 0.0;
+            setStateVar(ydot,source,en_surf_comp[nc],g_idx_p,m_x_idx);
+         }
 
       }
+      if (m_with_energy){
+         source = 0.0;
+         source = (m_fluxes_temp[g_idx_p] - m_fluxes_temp[g_idx_p+1])/ dx;
 
-    for (int nc =0;nc<m_surf_sp;++nc){
-       source = 0.0;
-       setStateVar(ydot,source,en_surf_comp[nc],m_nx,m_x_idx);
-    }
-    if (m_with_energy){
-      for (int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
-          dx = m_x_co[g_idx_p+1] - m_x_co[g_idx_p];
-        source = 0.0;
-        source = m_fluxes_temp[g_idx_p] - m_fluxes_temp[g_idx_p+1];
+         m_kin->getNetRatesOfProgress(&m_temp_rates_of_progress.front());
+         m_kin->getDeltaEnthalpy(&m_temp_delta_enthalpy.front());
+         for (int nr=0;nr < m_kin->nReactions();++nr){
+            source -= m_area_to_volume *
+                      m_temp_rates_of_progress[nr] * m_temp_delta_enthalpy[nr];
+         }
+         // Taking into account the thermal inertia of the solid
+         if (source != source) source = 0.0;
+         source = source/(1E6);
+         setStateVar(ydot,source,en_temperature,g_idx_p+1,m_x_idx);
+      }
 
-        for (int nc =0;nc<m_vol_sp;++nc){
-           m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],g_idx_p+1,m_x_idx);
-        }
-        for (int nc =0;nc<m_surf_sp;++nc){
-           m_temp_surf_coverages[nc] = getStateVar(y,en_surf_comp[nc],g_idx_p+1,m_x_idx);
-        }
-
-        temperature = getStateVar(y,en_temperature,g_idx_p+1,m_x_idx);
-        m_gas_phase->setState_TPY(temperature,m_bulk_pressure,&m_temp_vol_massfraction.front());
-        m_surface_phase->setMassFractions(&m_temp_surf_coverages.front());
-        m_surface_phase->setTemperature(temperature);
-
-        m_kin->getNetRatesOfProgress(&m_temp_rates_of_progress.front());
-        m_kin->getDeltaEnthalpy(&m_temp_delta_enthalpy.front());
-        for (int nr=0;nr < m_kin->nReactions();++nr){
-           source -= m_area_to_volume *
-                     m_temp_rates_of_progress[nr] * m_temp_delta_enthalpy[nr]*dx;
-        }
-        // Taking into account the thermal inertia of the solid
-        source = source/(1E6*dx);
-        setStateVar(ydot,source,en_temperature,g_idx_p+1,m_x_idx);
-
-
+      // Set ydot to zero value in extra cell
+      for (int nc =0;nc<m_surf_sp;++nc){
+         source = 0.0;
+         setStateVar(ydot,source,en_surf_comp[nc],m_nx,m_x_idx);
       }
    }
 
 
    double bulk_y_dot = 0;
    double state_left = 0.0;
-   double state_left_left = 0.0;
-   bool first_order = true;
-   double face_left, face_right;
 
    for (int nc =0;nc<m_vol_sp;++nc){
-        if (m_x_idx == 0){
-           first_order = true;
-           state_left = m_inflow_comp[nc];
-        }
-        else{
-           state_left = getStateVar(y,en_vol_comp[nc],0,m_x_idx-1);
-        }
+      if (m_x_idx == 0){
+         state_left = m_inflow_comp[nc];
+      }
+      else{
+         state_left = getStateVar(y,en_vol_comp[nc],0,m_x_idx-1);
+      }
 
-        if (m_x_idx == 1 or m_x_idx == 0)
-//        if (m_x_idx == 1)
-           state_left_left = m_inflow_comp[nc];
-        else
-           state_left_left = getStateVar(y,en_vol_comp[nc],0,m_x_idx-2);
 
-        if (m_x_idx == m_nxcells -1){
-           first_order = true;
-        }
+      bulk_y_dot = m_vel*m_bulk_density * (state_left-getStateVar(y,en_vol_comp[nc],0,m_x_idx))/(m_L_r/m_nxcells)- m_A_V* m_fluxes[nc][0];
 
-        if (first_order){
-           bulk_y_dot = m_vel*m_bulk_density * (state_left-getStateVar(y,en_vol_comp[nc],0,m_x_idx))/(m_L_r/m_nxcells)- m_A_V* m_fluxes[nc][0];
-        }else{
-           face_left  = 6*state_left_left + 3*state_left - getStateVar(y,en_vol_comp[nc],0,m_x_idx);
-           face_right = 6*state_left + 3*getStateVar(y,en_vol_comp[nc],0,m_x_idx) - getStateVar(y,en_vol_comp[nc],0,m_x_idx+1);
-
-           bulk_y_dot = m_vel*m_bulk_density * (face_left -face_right)/(8*m_L_r/m_nxcells)- m_A_V* m_fluxes[nc][0];
-        }
-        if (bulk_y_dot != bulk_y_dot){
-           bulk_y_dot = 0.0;
-        }
-           setStateVar(ydot,bulk_y_dot,en_vol_comp[nc],0,m_x_idx);
+      if (bulk_y_dot != bulk_y_dot){
+         bulk_y_dot = 0.0;
+      }
+      setStateVar(ydot,bulk_y_dot,en_vol_comp[nc],0,m_x_idx);
    }
 
    if (m_with_energy){
       setStateVar(ydot,0.0,en_temperature,0,m_x_idx);
    }
 
+}
 
-  // double sum_ydot;
-  // std::vector<double>::iterator it;
-  // std::vector<double>  ydot_vec;
-  // for(int idx=0;idx < (m_nx+1)*(m_surf_sp+m_vol_sp); ++idx){
-  //    ydot_vec.push_back(std::abs(ydot[idx]));
-  // }
+void SingleWc::setCanterafromState(doublereal* y,int g_idx_p){
+   double temperature;
+   for (int nc =0;nc<m_vol_sp;++nc){
+      m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],g_idx_p+1,m_x_idx);
+   }
 
-  // it= std::max_element(ydot_vec.begin(),ydot_vec.end());
-  // double max_el = *it;
-  // int max_idx = std::distance(ydot_vec.begin(),it);
+   for (int nc =0;nc<m_surf_sp;++nc){
+      m_temp_surf_coverages[nc] = getStateVar(y,en_surf_comp[nc],g_idx_p,m_x_idx);
+   }
 
-  // std::cout << m_x_idx <<" " <<max_el <<" "<< m_bulk_massfraction <<" "<<max_idx << std::endl;
+   if (m_with_energy) {
+      temperature = std::max(getStateVar(y,en_temperature,g_idx_p+1,m_x_idx),100.0);
+   }else{
+      temperature = m_bulk_temperature;
+   }
 
-
+   m_gas_phase->setState_TPY(temperature,m_bulk_pressure,&m_temp_vol_massfraction.front());
+   m_surface_phase->setMoleFractions(&m_temp_surf_coverages.front());
+   m_surface_phase->setTemperature(temperature);
 }
 
 void SingleWc::createGrid(){
@@ -384,9 +341,6 @@ void SingleWc::set_bulk_temperature(double temperature){
 
 void SingleWc::update_fluxes(double* state){
 
-   int var_idx_p, var_idx_w;
-   int state_idx_p, state_idx_w;
-   int g_idx_p, g_idx_w;
 
    double Y_1, T_1;
    double prefactor_inf, prefactor_bulk, prefactor_mix;
@@ -395,42 +349,40 @@ void SingleWc::update_fluxes(double* state){
    for(int nc=0;nc<m_vol_sp;++nc){
 
       // Compute rho * diff coeff for all the cells
-      for(g_idx_p=0; g_idx_p < m_nx_var; ++g_idx_p){
+      for(int g_idx_p=0; g_idx_p < m_nx_var; ++g_idx_p){
            m_prefactor[g_idx_p] =  m_rho[g_idx_p]
                           * m_diff_coeffs[g_idx_p][nc];
       }
 
       // Compute west fluxes for all the cells
-      for(g_idx_w=1; g_idx_w < m_nx; ++g_idx_w){
-         state_idx_p = g_idx_w;
-         state_idx_w = g_idx_w-1;
-         var_idx_p = g_idx_w+1;
-         var_idx_w = g_idx_w;
+      for(int g_idx_w=1; g_idx_w < m_nx; ++g_idx_w){
 
          //prefactor
-         m_fluxes[nc][g_idx_w] = interpolate_values(m_fx[var_idx_w]
-                                    ,m_prefactor[var_idx_w],m_prefactor[var_idx_p]);
+         m_fluxes[nc][g_idx_w] = interpolate_values(m_fx[g_idx_w]
+                                    ,m_prefactor[g_idx_w],m_prefactor[g_idx_w+1]);
 
          // Multiply with component gradient
          m_fluxes[nc][g_idx_w] =  m_fluxes[nc][g_idx_w] *
-                        (getStateVar(state,en_vol_comp[nc],state_idx_w+1,m_x_idx) -
-                         getStateVar(state,en_vol_comp[nc],state_idx_p+1,m_x_idx)) /
-                         (m_x[var_idx_p] - m_x[var_idx_w] + m_small);
+                        (getStateVar(state,en_vol_comp[nc],g_idx_w,m_x_idx) -
+                         getStateVar(state,en_vol_comp[nc],g_idx_w+1,m_x_idx)) /
+                         (m_x[g_idx_w+1] - m_x[g_idx_w] + m_small);
       }
 
 
       //D_b*D_i*h*rho_b*rho_i*(-Y_1 + Y_b)/(D_b*dx*h*rho_b + D_i*rho_i)
       // Apply the boundary condition for the first cell
+
+      // Special case for no wash coat
       if (m_nx == 1){
          dx_inf = 0.0;
       }else{
          dx_inf = m_x[1] - m_x[0];
       }
-      prefactor_inf = interpolate_values(m_fx[0],m_prefactor[0],m_prefactor[1]);
+      prefactor_inf  = interpolate_values(m_fx[0],m_prefactor[0],m_prefactor[1]);
       prefactor_bulk = m_bulk_diff_coeffs[nc] * m_bulk_density
                        * m_wc_coefficient[nc] * dx_inf;
-      prefactor_mix = prefactor_inf * m_bulk_density *m_wc_coefficient[nc]
-                       *m_bulk_diff_coeffs[nc];
+      prefactor_mix  = prefactor_inf * m_bulk_density *m_wc_coefficient[nc]
+                        *m_bulk_diff_coeffs[nc];
 
       Y_1 = getStateVar(state,en_vol_comp[nc],1,m_x_idx);
       m_fluxes[nc][0] =(prefactor_mix *
@@ -439,28 +391,26 @@ void SingleWc::update_fluxes(double* state){
 
       }
 
+       // Fluxes for the energy equation
        if (m_with_energy){
-        for(g_idx_w=1; g_idx_w < m_nx; ++g_idx_w){
-           state_idx_p = g_idx_w;
-           state_idx_w = g_idx_w-1;
-           var_idx_p = g_idx_w+1;
-           var_idx_w = g_idx_w;
+          for(int g_idx_w=1; g_idx_w < m_nx; ++g_idx_w){
 
-           m_fluxes_temp[g_idx_w] = interpolate_values(m_fx[var_idx_w]
-                                                      ,m_diff_temp[var_idx_w],m_diff_temp[var_idx_p]);
-           m_fluxes_temp[g_idx_w] = m_fluxes_temp[g_idx_w] *
-                        (getStateVar(state,en_temperature,state_idx_w+1,m_x_idx) -
-                         getStateVar(state,en_temperature,state_idx_p+1,m_x_idx)) /
-                         (m_x[var_idx_p] - m_x[var_idx_w] + m_small);
+             m_fluxes_temp[g_idx_w] = interpolate_values(m_fx[g_idx_w]
+                                                        ,m_diff_temp[g_idx_w],m_diff_temp[g_idx_w+1]);
+             m_fluxes_temp[g_idx_w] = m_fluxes_temp[g_idx_w] *
+                          (getStateVar(state,en_temperature,g_idx_w,m_x_idx) -
+                           getStateVar(state,en_temperature,g_idx_w+1,m_x_idx)) /
+                           (m_x[g_idx_w+1] - m_x[g_idx_w] + m_small);
 
-        }
+          }
 
-        T_1 = getStateVar(state,en_temperature,1,m_x_idx);
-        prefactor_inf    = interpolate_values(m_fx[0],m_diff_temp[0],m_diff_temp[1]);
-        prefactor_bulk   = m_bulk_diff_temp * m_wc_coefficient_temp * dx_inf;
-        prefactor_mix    = prefactor_inf * m_wc_coefficient_temp * m_bulk_diff_temp;
-        m_fluxes_temp[0] = prefactor_mix * (m_bulk_temperature - T_1)/
-                         (prefactor_bulk + prefactor_inf + m_small);
+          // Boundary condition
+          T_1 = getStateVar(state,en_temperature,1,m_x_idx);
+          prefactor_inf    = interpolate_values(m_fx[0],m_diff_temp[0],m_diff_temp[1]);
+          prefactor_bulk   = m_bulk_diff_temp * m_wc_coefficient_temp * dx_inf;
+          prefactor_mix    = prefactor_inf * m_wc_coefficient_temp * m_bulk_diff_temp;
+          m_fluxes_temp[0] = prefactor_mix * (m_bulk_temperature - T_1)/
+                           (prefactor_bulk + prefactor_inf + m_small);
        }
 }
 
@@ -479,74 +429,85 @@ void SingleWc::update_material_properties(double* y){
 
    temperature = m_bulk_temperature;
 
-   if (std::abs(temperature -m_update_temp) < 1.0){
+   if (std::abs(temperature -m_update_temp) < 1.0 and m_update_counter < 100){
+      ++m_update_counter;
       return;
    }
+   m_update_counter = 0;
    m_update_temp = temperature;
 
+   // Update Bulk properties
    m_gas_phase->setState_TPY(temperature,m_bulk_pressure,&m_bulk_massfraction.front());
    m_transport->getMixDiffCoeffs(&m_bulk_diff_coeffs.front());
    m_bulk_diff_temp = m_transport->thermalConductivity();
-   m_bulk_density = m_gas_phase->density();
+   m_bulk_density   = m_gas_phase->density();
 
    if (m_wc_coefficient_in < 0){
       set_mt_coefficient_mladenov();
    }
+
+   // Loop over all the cells in the was coat
    for (int loc_idx=0;loc_idx<m_nx_var;++loc_idx){
 
-     // Compute the surface massfraction based on the flux condtion
-     if (loc_idx == 0){
-       for (int nc =0;nc<m_vol_sp;++nc){
-          m_temp_vol_massfraction[nc] = -m_fluxes[nc][0]/
-                                     (m_bulk_diff_coeffs[nc]*
-                                      m_wc_coefficient[nc] * m_bulk_density +m_small)
-                                      + m_bulk_massfraction[nc];
-       }
-       if (m_with_energy){
-       temperature = -m_fluxes_temp[0]/
-                   (m_bulk_diff_temp *
-                    m_wc_coefficient_temp + m_small)
-                  + m_bulk_temperature;
-       }
+      // Compute the surface massfraction based on the flux condition for the first cell
+      if (loc_idx == 0){
+         for (int nc =0;nc<m_vol_sp;++nc){
+            m_temp_vol_massfraction[nc] = -m_fluxes[nc][0]/
+                                       (m_bulk_diff_coeffs[nc]*
+                                        m_wc_coefficient[nc] * m_bulk_density +m_small)
+                                        + m_bulk_massfraction[nc];
+         }
+         if (m_with_energy){
+         temperature = -m_fluxes_temp[0]/
+                     (m_bulk_diff_temp *
+                      m_wc_coefficient_temp + m_small)
+                    + m_bulk_temperature;
+         }
 
-     }
-
-     // Use the same value at the boundary since the flux is zero
-     else if (loc_idx == m_nx_var-1){
-       for (int nc =0;nc<m_vol_sp;++nc){
-          m_temp_vol_massfraction[nc] = getStateVar(y,en_vol_comp[nc],loc_idx-1,m_x_idx);
-     }
-       if (m_with_energy){
-          temperature = getStateVar(y,en_temperature,loc_idx-1,m_x_idx);
-       }
-     }
-
-     else{
-       for (int nc =0;nc<m_vol_sp;++nc){
-       m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],loc_idx,m_x_idx);
       }
+
+      // Copy from inside at the boundary since the flux is zero
+      else if (loc_idx == m_nx_var-1){
+         for (int nc =0;nc<m_vol_sp;++nc){
+            m_temp_vol_massfraction[nc] = getStateVar(y,en_vol_comp[nc],loc_idx-1,m_x_idx);
+         }
+         if (m_with_energy){
+            temperature = getStateVar(y,en_temperature,loc_idx-1,m_x_idx);
+         }
+      }
+
+      else{
+         for (int nc =0;nc<m_vol_sp;++nc){
+            m_temp_vol_massfraction[nc]  = getStateVar(y,en_vol_comp[nc],loc_idx,m_x_idx);
+         }
+         if (m_with_energy){
+            temperature = getStateVar(y,en_temperature,loc_idx,m_x_idx);
+         }
+      }
+
+      m_gas_phase->setState_TPY(temperature,m_bulk_pressure
+                              ,&m_temp_vol_massfraction.front());
+
+      m_rho[loc_idx]       = m_gas_phase->density();
+
+
+      // Bulk diffusion coefficients
+      m_transport->getMixDiffCoeffs(&m_temp_diff_coeffs.front());
+      for (int nc=0;nc<m_vol_sp;++nc){
+         // Knudsen diffusion coefficients
+         knudsen_diff_coeff = m_dp/3.0 * sqrt(abs(8.0*GasConstant*temperature/
+                                           (Pi * m_gas_phase->molecularWeight(nc))+m_small));
+
+         // Effective diffusion coefficient
+         m_diff_coeffs[loc_idx][nc] = m_porosity
+                                      /(m_tortuosity + m_small) *
+                                      (1.0/(1.0/(knudsen_diff_coeff + m_small) +1.0/(m_temp_diff_coeffs[nc] + m_small) + m_small));
+      }
+
       if (m_with_energy){
-         temperature = getStateVar(y,en_temperature,loc_idx,m_x_idx);
+         m_diff_temp[loc_idx] = m_porosity * m_transport->thermalConductivity()
+                               + (1.0-m_porosity) * m_lambda_solid;
       }
-     }
-
-    m_gas_phase->setState_TPY(temperature,m_bulk_pressure
-                           ,&m_temp_vol_massfraction.front());
-
-     m_rho[loc_idx]       = m_gas_phase->density();
-     if (m_with_energy){
-        m_diff_temp[loc_idx] = m_porosity * m_transport->thermalConductivity()
-                            + (1.0-m_porosity) * m_lambda_solid;
-     }
-
-     m_transport->getMixDiffCoeffs(&m_temp_diff_coeffs.front());
-     for (int nc=0;nc<m_vol_sp;++nc){
-      knudsen_diff_coeff = m_dp/3.0 * sqrt(abs(8.0*GasConstant*temperature/
-                                        (Pi * m_gas_phase->molecularWeight(nc))+m_small));
-      m_diff_coeffs[loc_idx][nc] = m_porosity
-                                  /(m_tortuosity + m_small) *
-                                  (1.0/(1.0/(knudsen_diff_coeff + m_small) +1.0/(m_temp_diff_coeffs[nc] + m_small) + m_small));
-    }
    }
 
 }
@@ -554,14 +515,14 @@ void SingleWc::update_material_properties(double* y){
 
 
 void SingleWc::set_mt_coefficient_mladenov(){
-  double dx = m_L_r/m_nxcells;
-  double gz_prefac, loc_gz;
-  gz_prefac = (m_x_idx * dx + dx/2) / (pow(0.001,2) * m_vel);
-  for (int nc=0;nc <m_vol_sp;++nc){
-    loc_gz = gz_prefac * m_bulk_diff_coeffs[nc];
-    m_wc_coefficient[nc] = (3.675 + 8.827*std::pow((1000.*loc_gz),-0.545)
-                                  *std::exp(-48.2*loc_gz))*1000.0;
-  }
+   double dx = m_L_r/m_nxcells;
+   double gz_prefac, loc_gz;
+   gz_prefac = (m_x_idx * dx + dx/2) / (pow(0.001,2) * m_vel);
+   for (int nc=0;nc <m_vol_sp;++nc){
+      loc_gz = gz_prefac * m_bulk_diff_coeffs[nc];
+      m_wc_coefficient[nc] = (3.675 + 8.827*std::pow((1000.*loc_gz),-0.545)
+                                    *std::exp(-48.2*loc_gz))*1000.0;
+   }
 }
 
 

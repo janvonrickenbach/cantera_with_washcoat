@@ -50,6 +50,9 @@ void get_state_object(wcdata& data);
 void set_state(double* state, const wcdata& data);
 
 
+ // Set the masstransfer coefficient according to the
+ // paper of Mladenov. This is called if the
+ // masstransfer coefficient is smaller than 0
  void set_mt_coefficient_mladenov();
 
 //Getters
@@ -65,14 +68,21 @@ int get_surf_sp() const {
 	return m_surf_sp;
 }
 
+// Set the bulk temperature
 void set_bulk_temperature(double temperature);
 
+// Evaluate the rhs of the ODE. This is called by
+// CVode
 void eval(doublereal time, doublereal* y,
                     doublereal* ydot, doublereal* p);
 
+// Set the initial conditions. This is called by CVode
 void getInitialConditions(doublereal* y);
+
+// Calls the write_wc routine of the wash-coat data class.
 void write_wc(int step);
 
+// Number of unknowns in the ODE. Called by CVode
 std::size_t neq();
 
     // Type for the variable enumerations
@@ -89,6 +99,8 @@ doublereal getStateVar(double* state,vars_enum var,int loc_idx, int m_x_idx) con
    return state[m_x_idx*(m_nvars*(m_nx+1))+loc_idx*m_nvars+var];
 }
 
+void setCanterafromState(double* state, int g_idx);
+
 protected:
     // Type to store varialbes that exist in every cell
 	// for a number of components
@@ -97,19 +109,65 @@ protected:
     // Type for scalar variables on the grid
     typedef std::vector<double> grid_vector;
 
+    // Pointer to interface kinetics object
+    InterfaceKinetics* m_kin;
+
+    // Pointer to transport manager
+    Transport* m_transport;
+
+    // Bulk heat-transfer coefficient
+    doublereal m_wc_coefficient_temp;
+
+    // Bulk mass-transfer coefficient
+    std::vector<doublereal> m_wc_coefficient;
+    doublereal m_wc_coefficient_in;
+
+    // Washcoat thickness
+    doublereal m_wc_thickness;
+
+    // Number of cell centers
+    int m_nx;
+
+    // Area to volume ratio
+    doublereal m_area_to_volume;
+
+    // Decide if energy equation is solved
+    bool m_with_energy;
+
+    // Washcoat porostiy
+    doublereal  m_porosity;
+
+    // Washcoat solid conductivity
+    doublereal m_lambda_solid;
+
+    // Washcoat tortuosity
+    doublereal m_tortuosity;
+
+    // Washcoat pore diameter
+    doublereal m_dp;
+
     int m_x_idx;
+
+    ImplicitSurfChem_wc* m_surf_chem;
 
     double m_L_r;
     double m_vel;
 
-    double m_A_V;
     int m_nxcells;
+
+    double m_A_V;
 
     bool m_from_file;
 
     double m_mintemp;
     double m_maxtemp;
     double m_trate;
+
+    // Pointer to gas phase
+    ThermoPhase* m_gas_phase;
+
+    // Pointer to surface phase
+    SurfPhase* m_surface_phase;
 
     // Bulk Values
     std::vector<doublereal> m_bulk_massfraction;
@@ -141,9 +199,6 @@ protected:
     // Temporary arrays for reaction enthalpy
     std::vector<doublereal> m_temp_delta_enthalpy;
 
-    // Number of cell centers
-    int m_nx;
-
     // Number of cell corners
     int m_nco;
 
@@ -164,55 +219,18 @@ protected:
     // Interpolation coefficients
     grid_vector m_fx;
 
-    // Washcoat thickness
-    doublereal m_wc_thickness;
-
     std::vector<double> m_prefactor;
-
-    // Area to volume ratio
-    doublereal m_area_to_volume;
 
     doublereal m_update_temp;
 
-    // Washcoat pore diameter
-    doublereal m_dp;
+    int m_update_counter;
 
-    // Washcoat porostiy
-    doublereal  m_porosity;
-
-    // Washcoat tortuosity
-    doublereal m_tortuosity;
-
-    // Washcoat solid conductivity
-    doublereal m_lambda_solid;
-
-    // Bulk mass-transfer coefficient
-    std::vector<doublereal> m_wc_coefficient;
-    doublereal m_wc_coefficient_in;
-
-    // Bulk heat-transfer coefficient
-    doublereal m_wc_coefficient_temp;
 
     // Density at each grid point including boundaries
     grid_vector m_rho;
 
     // Diffusion Coefficients at each grid point including boundaries
     comp_vector m_diff_coeffs;
-
-    // Pointer to transport manager
-    Transport* m_transport;
-
-    // Pointer to gas phase
-    ThermoPhase* m_gas_phase;
-
-    ImplicitSurfChem_wc* m_surf_chem;
-
-
-    // Pointer to surface phase
-    SurfPhase* m_surface_phase;
-
-    // Pointer to interface kinetics object
-    InterfaceKinetics* m_kin;
 
     // Pointer wcdata object
     wcdata* m_wcdata;
@@ -225,13 +243,14 @@ protected:
     // Number of surface species
     int m_surf_sp;
 
-    bool m_with_energy;
-
     // Number of variables for the
     // ODE solver (gridpoints *variables)
     int m_nvars;
+
+    // Small value to avoid division by zero
     double m_small;
 
+    // Enumerations
     std::vector<vars_enum> en_vol_comp;
     std::vector<vars_enum> en_surf_comp;
     vars_enum en_temperature;

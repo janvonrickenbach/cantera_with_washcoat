@@ -1378,24 +1378,34 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
 
 	// Create an wcdata object with the state of the kinetics object
 	double time = 0.0;
+	double target_tolerance= rtol;
+	double current_tolerance = target_tolerance;
 	double target_time = dt/n_output;
 	double tout;
+	double old_time = 0.0;
    m_integrator_wc->initialize();
 	while (time < dt)
       try{
+
          m_integrator_wc->write_wc(-1);
-//       m_integrator_wc->set_bulk_temperature(temperature);
+         if (temperature > 0.0)   m_integrator_wc->set_bulk_temperature(temperature);
+         old_time = time;
          m_integrator_wc->integrate(time, target_time,0);
 //         m_integrator_wc->integrate(0.0, dt/n_output,0);
          target_time += dt/n_output;
          m_integrator_wc->write_wc(int(time));
-         std::cout << time << " " << target_time << std::endl;
+         std::cout << "current time: " << time << " target time: " << target_time << " current rtol: " <<  current_tolerance <<std::endl;
+         current_tolerance = target_tolerance;
+         m_integrator_wc->m_integ->setTolerances(target_tolerance,atol);
       }
       catch (CanteraError& e){
          Cantera::showErrors();
          time = m_integrator_wc->m_integ->getCurrentTime();
          m_integrator_wc->write_wc(int(time));
-         std::cout << time << " " << target_time << std::endl;
+         std::cout << "current time: " << time << " target time: " << target_time << " current rtol: " <<  current_tolerance <<std::endl;
+         if (time -old_time < 1E-2)
+            current_tolerance = target_tolerance*1E3;
+            m_integrator_wc->m_integ->setTolerances(current_tolerance,atol);
       }
 
 }

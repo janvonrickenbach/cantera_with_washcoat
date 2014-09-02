@@ -193,6 +193,10 @@ void CVodesIntegrator::setTolerances(double reltol, double abstol)
     m_itol = CV_SS;
     m_reltol = reltol;
     m_abstols = abstol;
+    if (m_cvode_mem) {
+       CVodeSStolerances(m_cvode_mem, m_reltol, m_abstols);
+       CVodeReInit(m_cvode_mem, m_time, m_y);
+    }
 }
 
 void CVodesIntegrator::setSensitivityTolerances(double reltol, double abstol)
