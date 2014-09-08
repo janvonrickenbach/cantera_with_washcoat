@@ -80,7 +80,7 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
  */
 ImplicitSurfChem_wc::~ImplicitSurfChem_wc()
 {
-    delete m_integ;
+   delete m_integ;
 }
 
 void ImplicitSurfChem_wc::getInitialConditions(doublereal t0, size_t lenc,
@@ -98,13 +98,13 @@ void ImplicitSurfChem_wc::getInitialConditions(doublereal t0, size_t lenc,
  */
 void ImplicitSurfChem_wc::initialize(doublereal t0)
 {
-    m_integ->setTolerances(m_rtol, m_atol);
-    m_integ->initialize(t0, *this);
+   m_integ->setTolerances(m_rtol, m_atol);
+   m_integ->initialize(t0, *this);
 }
 
 void ImplicitSurfChem_wc::reinitialize(doublereal t0)
 {
-    m_integ->reinitialize(t0, *this);
+   m_integ->reinitialize(t0, *this);
 }
 
 

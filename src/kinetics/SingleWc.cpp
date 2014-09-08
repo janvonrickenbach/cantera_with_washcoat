@@ -77,7 +77,7 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
       m_inflow_comp.resize(m_vol_sp,0.0);
       m_gas_phase->getMassFractions(&m_inflow_comp.front());
 
-
+      if (m_with_energy) m_inflow_temp = m_gas_phase->temperature();
 
       // Allocate temporary arrays
       m_prefactor.resize(m_nx_var);
@@ -241,6 +241,8 @@ void SingleWc::eval(doublereal time, doublereal* y,
 
    double bulk_y_dot = 0;
    double state_left = 0.0;
+   double cp;
+   cp = m_gas_phase->cp_mass();
 
    for (int nc =0;nc<m_vol_sp;++nc){
       if (m_x_idx == 0){
@@ -251,7 +253,7 @@ void SingleWc::eval(doublereal time, doublereal* y,
       }
 
 
-      bulk_y_dot = m_vel*m_bulk_density * (state_left-getStateVar(y,en_vol_comp[nc],0,m_x_idx))/(m_L_r/m_nxcells)- m_A_V* m_fluxes[nc][0];
+      bulk_y_dot = m_vel* (state_left-getStateVar(y,en_vol_comp[nc],0,m_x_idx))/(m_L_r/m_nxcells)- m_A_V* m_fluxes[nc][0]/m_bulk_density;
 
       if (bulk_y_dot != bulk_y_dot){
          bulk_y_dot = 0.0;
@@ -260,7 +262,15 @@ void SingleWc::eval(doublereal time, doublereal* y,
    }
 
    if (m_with_energy){
-      setStateVar(ydot,0.0,en_temperature,0,m_x_idx);
+      if (m_x_idx == 0){
+         state_left = m_inflow_temp;
+      }else{
+         state_left = getStateVar(y,en_temperature,0,m_x_idx-1);
+      }
+
+      bulk_y_dot = m_vel* (state_left-getStateVar(y,en_temperature,0,m_x_idx))/(m_L_r/m_nxcells)- m_A_V* m_fluxes_temp[0]/(m_bulk_density*cp);
+
+      setStateVar(ydot,bulk_y_dot,en_temperature,0,m_x_idx);
    }
 
 }
@@ -329,7 +339,6 @@ void SingleWc::createGrid(){
       m_fx[idx] = (m_x[idx+1] - m_x_co[idx])/(m_x[idx+1]-m_x[idx]);
    }
 }
-
 
 double SingleWc::interpolate_values(double fxp,double valp,double valw){
    return fxp * valp + (1-fxp) * valw;
@@ -414,13 +423,11 @@ void SingleWc::update_fluxes(double* state){
        }
 }
 
-
 void SingleWc::getInitialConditions(doublereal* y)
 {
    set_state(y,*m_wcdata);
 
 }
-
 
 void SingleWc::update_material_properties(double* y){
    double temperature;
@@ -488,7 +495,7 @@ void SingleWc::update_material_properties(double* y){
       m_gas_phase->setState_TPY(temperature,m_bulk_pressure
                               ,&m_temp_vol_massfraction.front());
 
-      m_rho[loc_idx]       = m_gas_phase->density();
+      m_rho[loc_idx]  = m_gas_phase->density();
 
 
       // Bulk diffusion coefficients
@@ -512,8 +519,6 @@ void SingleWc::update_material_properties(double* y){
 
 }
 
-
-
 void SingleWc::set_mt_coefficient_mladenov(){
    double dx = m_L_r/m_nxcells;
    double gz_prefac, loc_gz;
@@ -524,9 +529,6 @@ void SingleWc::set_mt_coefficient_mladenov(){
                                     *std::exp(-48.2*loc_gz))*1000.0;
    }
 }
-
-
-
 
 void SingleWc::get_state(wcdata& data) const{
 
@@ -573,7 +575,6 @@ void SingleWc::get_state_object(wcdata& data)  {
       data.get_temperature().at(g_idx_p) = temperature;
    }
 }
-
 
 void SingleWc::set_state(double* state, const wcdata& data){
    double temp_value;

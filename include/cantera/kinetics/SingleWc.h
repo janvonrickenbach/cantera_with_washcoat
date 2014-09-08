@@ -180,6 +180,7 @@ protected:
     // Fluxes for the species
     comp_vector m_fluxes;
     std::vector<double> m_inflow_comp;
+    double m_inflow_temp;
 
     // Fluxes for the energy equation
     std::vector<doublereal> m_fluxes_temp;

@@ -1376,15 +1376,15 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
                                             ,lambda_solid,atol,rtol,nx,with_energy,cells_x,L_r,vel,dt,A_V,from_file,maxsteps
                                             ,mintemp,maxtemp,trate);
 
-	// Create an wcdata object with the state of the kinetics object
-	double time = 0.0;
-	double target_tolerance= rtol;
-	double current_tolerance = target_tolerance;
-	double target_time = dt/n_output;
-	double tout;
-	double old_time = 0.0;
+   // Create an wcdata object with the state of the kinetics object
+   double time = 0.0;
+   double target_tolerance= rtol;
+   double current_tolerance = target_tolerance;
+   double target_time = dt/n_output;
+   double tout;
+   double old_time = 0.0;
    m_integrator_wc->initialize();
-	while (time < dt)
+   while (time < dt)
       try{
 
          m_integrator_wc->write_wc(-1);
@@ -1419,8 +1419,8 @@ void InterfaceKinetics::write_wcdata(int iistr1_nb,int ii,double x_coord, int pr
 }
 
 void InterfaceKinetics::end_wcmodel(){
-	delete m_integrator_wc;
-	delete m_wc_container;
+   delete m_integrator_wc;
+   delete m_wc_container;
 }
 
 //================================================================================================
