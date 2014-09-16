@@ -80,15 +80,16 @@ public:
      *           of surface adsorbates.
      */
     ImplicitSurfChem_wc(InterfaceKinetics* k
-    		           ,Transport* t
-    		           ,double h,double h_temp
-    		           ,double wc_thickness, double area_to_volume
-    		           ,double porosity, double tortuosity
-    		           ,double d_p, double lambda_solid
-    		           ,double atol, double rtol
-		               ,int nx,bool with_energy, int cells_x
-		              ,double L_r, double vel, double dt, double A_V,bool from_file, int maxsteps
-		              ,double mintemp, double maxtemp, double trate);
+                    ,Transport* t
+                    ,double h,double h_temp
+                    ,double wc_thickness, double area_to_volume
+                    ,double porosity, double tortuosity
+                    ,double d_p, double lambda_solid
+                    ,double atol, double rtol
+                    ,int nx,bool with_energy, int cells_x
+                    ,double L_r, double vel, double dt, double A_V,bool from_file, int maxsteps
+                    ,double mintemp, double maxtemp, double trate
+                    ,double rhocp, double rhocp_st, bool inf_ext_mt);
 
     /**
      * Destructor. Deletes the integrator.
@@ -157,18 +158,12 @@ public:
 
 
 protected:
-
-
-
     //! Pointer to the cvode integrator
     doublereal m_atol, m_rtol;   // tolerances
     doublereal m_maxstep;        // max step size
 
     int m_cells_x;
     std::vector<SingleWc*> wc_list;
-
-
-
 };
 
 }

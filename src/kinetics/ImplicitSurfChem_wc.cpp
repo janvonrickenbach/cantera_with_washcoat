@@ -32,7 +32,7 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
                                         ,double atol, double rtol
                                         ,int nx, bool with_energy
                                         ,int cells_x,double L_r, double vel, double dt, double A_V,bool from_file, int maxsteps
-                                        ,double mintemp,double maxtemp, double trate):
+                                        ,double mintemp,double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt):
     m_atol(atol),
     m_rtol(rtol),
     FuncEval(),
@@ -59,7 +59,8 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
 //    m_integ->setMaxOrder(1);
     for (int cell_idx=0;cell_idx < m_cells_x;++cell_idx){
        wc_list.push_back(new SingleWc(this,k,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity
-               ,d_p,lambda_solid,nx,with_energy,cell_idx,cells_x,L_r,vel,A_V,from_file,mintemp,maxtemp,trate));
+               ,d_p,lambda_solid,nx,with_energy,cell_idx,cells_x,L_r,vel,A_V,from_file,mintemp,maxtemp,trate
+               ,rhocp, rhocp_st, inf_ext_mt));
     }
 
 }

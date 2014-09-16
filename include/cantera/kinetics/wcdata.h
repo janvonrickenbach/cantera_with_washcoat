@@ -29,7 +29,11 @@ public:
 
    grid_vec& get_vol_massfractions();
 
+   grid_vec& get_fluxes();
+
    const grid_vec& get_temperature() const;
+
+   const grid_vec& get_fluxes() const;
 
    const grid_vec& get_surf_coverages() const;
 
@@ -40,9 +44,10 @@ public:
 
 
 protected:
-grid_vec m_vol_massfractions;
+   grid_vec m_vol_massfractions;
    grid_vec m_surf_coverages;
    grid_vec m_temperature;
+   grid_vec m_fluxes;
    int m_vol_sp;
    int m_surf_sp;
    int m_nx;

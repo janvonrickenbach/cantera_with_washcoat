@@ -30,7 +30,7 @@ public:
            ,double porosity, double tortuosity
            ,double d_p, double lambda_solid
            ,int nx, bool with_energy, int x_idx,int nxcells, double L_r, double vel, double A_V, bool from_file
-           ,double mintemp, double maxtemp, double trate);
+           ,double mintemp, double maxtemp, double trate,double rhocp, double rhocp_st, bool inf_ext_mt);
 
 
 ~SingleWc();
@@ -38,7 +38,7 @@ public:
 // Get the state of the CVode state vector and
 // copy it into the data object. Uses
 // the "solution" method of CVodeInt
-void get_state(wcdata& data) const;
+void get_state(wcdata& data);
 
 // Get the current state of the gas_phase
 // and the surface objects and copy it into the
@@ -76,6 +76,7 @@ void set_bulk_temperature(double temperature);
 void eval(doublereal time, doublereal* y,
                     doublereal* ydot, doublereal* p);
 
+
 // Set the initial conditions. This is called by CVode
 void getInitialConditions(doublereal* y);
 
@@ -103,7 +104,7 @@ void setCanterafromState(double* state, int g_idx);
 
 protected:
     // Type to store varialbes that exist in every cell
-	// for a number of components
+    // for a number of components
     typedef std::vector<std::vector<double> > comp_vector;
 
     // Type for scalar variables on the grid
@@ -162,6 +163,11 @@ protected:
     double m_mintemp;
     double m_maxtemp;
     double m_trate;
+
+    double m_rhocp;
+    double m_rhocp_st;
+
+    bool m_inf_ext_mt;
 
     // Pointer to gas phase
     ThermoPhase* m_gas_phase;
@@ -257,22 +263,23 @@ protected:
     vars_enum en_temperature;
 
 
-	// Creates the grid. This routine takes nx and wc_thickness
-	// and buids a grid. It set the corner coordinates and the
-	// interpolation cofficinets for the faces
-	void createGrid();
 
-    // Updated the fluxes for all the species and the energy equation
-	void update_fluxes(double* state);
+   // Creates the grid. This routine takes nx and wc_thickness
+   // and buids a grid. It set the corner coordinates and the
+   // interpolation cofficinets for the faces
+   void createGrid();
 
-    // Uses the interpolation coefficients to interpolate the
-	// input values th a cell phase
-	double interpolate_values(double fxp,double val,double valw);
+      // Updated the fluxes for all the species and the energy equation
+   void update_fluxes(double* state);
+
+      // Uses the interpolation coefficients to interpolate the
+   // input values th a cell phase
+   double interpolate_values(double fxp,double val,double valw);
 
 
-	// Updates the material properties
-	// Diffusion coefficient, conductivity, density
-	// Currently sets it to the bulk state
+   // Updates the material properties
+   // Diffusion coefficient, conductivity, density
+   // Currently sets it to the bulk state
    void update_material_properties(double* y);
 
     // Takes a state vector gets the value of var at grid point
@@ -283,8 +290,10 @@ protected:
     // Takes a state vector sets value of var at grid point
     // loc_idx
     // loc_idx is the index in the state vector, which means boundary
-	// points are not included
+    // points are not included
 
+   double bulk_massfraction(double* y,int nc);
+   double bulk_temperature(double* y);
 
 };
 } /* namespace Cantera */

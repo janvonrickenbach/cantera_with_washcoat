@@ -1370,11 +1370,11 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
                                          ,bool with_energy
                                          ,int istorf, int cells_x
                                          ,double L_r, double vel, double dt, double A_V,int n_output,double temperature, bool from_file, int maxsteps
-                                         ,double mintemp, double maxtemp, double trate){
+                                         ,double mintemp, double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt){
 
    m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity,d_p
                                             ,lambda_solid,atol,rtol,nx,with_energy,cells_x,L_r,vel,dt,A_V,from_file,maxsteps
-                                            ,mintemp,maxtemp,trate);
+                                            ,mintemp,maxtemp,trate,rhocp,rhocp_st,inf_ext_mt);
 
    // Create an wcdata object with the state of the kinetics object
    double time = 0.0;
@@ -1384,16 +1384,23 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
    double tout;
    double old_time = 0.0;
    m_integrator_wc->initialize();
-   while (time < dt)
+   int iteration_counter = 1;
+
+   write_time_file(0,0.0,false);
+   m_integrator_wc->write_wc(0);
+
+   while (time < dt){
+      iteration_counter++;
       try{
 
          m_integrator_wc->write_wc(-1);
          if (temperature > 0.0)   m_integrator_wc->set_bulk_temperature(temperature);
          old_time = time;
          m_integrator_wc->integrate(time, target_time,0);
-//         m_integrator_wc->integrate(0.0, dt/n_output,0);
+         write_time_file(iteration_counter,time,true);
          target_time += dt/n_output;
-         m_integrator_wc->write_wc(int(time));
+         m_integrator_wc->write_wc(iteration_counter);
+         m_integrator_wc->write_wc(0);
          std::cout << "current time: " << time << " target time: " << target_time << " current rtol: " <<  current_tolerance <<std::endl;
          current_tolerance = target_tolerance;
          m_integrator_wc->m_integ->setTolerances(target_tolerance,atol);
@@ -1401,13 +1408,31 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
       catch (CanteraError& e){
          Cantera::showErrors();
          time = m_integrator_wc->m_integ->getCurrentTime();
-         m_integrator_wc->write_wc(int(time));
+         write_time_file(iteration_counter,time,true);
+         m_integrator_wc->write_wc(iteration_counter);
+         m_integrator_wc->write_wc(0);
          std::cout << "current time: " << time << " target time: " << target_time << " current rtol: " <<  current_tolerance <<std::endl;
          if (time -old_time < 1E-2)
             current_tolerance = target_tolerance*1E3;
             m_integrator_wc->m_integ->setTolerances(current_tolerance,atol);
       }
+   }
 
+}
+
+
+void InterfaceKinetics::write_time_file(int step,double time,bool append){
+   std::ofstream myfile;
+
+   if (append){
+     myfile.open("time_file.dat",ios::app);
+   }else{
+     myfile.open("time_file.dat");
+   }
+
+   myfile << step << " " << time << " " << std::endl;
+
+   myfile.close();
 }
 
 

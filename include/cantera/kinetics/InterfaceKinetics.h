@@ -513,10 +513,12 @@ public:
                            ,int istorf, int x_cells, double L_r
                            ,double vel, double dt, double A_V
                            ,int n_output, double temperature
-                           ,bool from_file, int maxiter,double mintemp, double maxtemp, double trate);
+                           ,bool from_file, int maxiter,double mintemp, double maxtemp, double trate
+                           ,double rhocp, double rhocp_st, bool inf_ext_mt);
 
     void advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes, int maxiter,double gz);
     void write_wcdata(int iistr1_nb,int ii,double x_coord, int proc);
+    void write_time_file(int step,double time,bool append);
     void end_wcmodel();
     //! Solve for the pseudo steady-state of the surface problem
     /*!

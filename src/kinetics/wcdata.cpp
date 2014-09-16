@@ -52,6 +52,7 @@ void wcdata::initialize_arrays(){
    m_nx      = m_wc_obj->get_nx();
 
    m_vol_massfractions.resize((m_nx+1)*m_vol_sp);
+   m_fluxes.resize((m_nx+1)*m_vol_sp);
    m_surf_coverages.resize(m_nx*m_surf_sp);
    m_temperature.resize(m_nx+1);
 
@@ -59,6 +60,10 @@ void wcdata::initialize_arrays(){
 
 wcdata::grid_vec& wcdata::get_temperature()  {
    return m_temperature;
+}
+
+wcdata::grid_vec& wcdata::get_fluxes()  {
+   return m_fluxes;
 }
 
 wcdata::grid_vec& wcdata::get_surf_coverages()  {
@@ -73,6 +78,9 @@ const wcdata::grid_vec& wcdata::get_temperature() const {
    return m_temperature;
 }
 
+const wcdata::grid_vec& wcdata::get_fluxes() const{
+   return m_fluxes;
+}
 const wcdata::grid_vec& wcdata::get_surf_coverages() const {
    return m_surf_coverages;
 }
@@ -87,16 +95,16 @@ wcdata::~wcdata() {
 }
 
 void wcdata::write_data(int x_idx,int step) const {
-	std::ofstream myfile;
-	std::stringstream ss;
-	std::string temp_string;
+   std::ofstream myfile;
+   std::stringstream ss;
+   std::string temp_string;
 
-	ss << "grid_" << x_idx <<"_" << step << ".dat";
+   ss << "grid_" << x_idx <<"_" << step << ".dat";
 
-	std::cout.precision(15);
+   std::cout.precision(15);
 
-	temp_string = ss.str();
-	myfile.open(temp_string.c_str());
+   temp_string = ss.str();
+   myfile.open(temp_string.c_str());
 
     grid_vec::const_iterator it;
     int idx;
@@ -104,7 +112,7 @@ void wcdata::write_data(int x_idx,int step) const {
     for (idx=0,it = m_vol_massfractions.begin();
        it!=m_vol_massfractions.end();++it,++idx){
        myfile << std::scientific
-              << std::setprecision(std::numeric_limits<double>::digits10/4)
+              << std::setprecision(std::numeric_limits<double>::digits10/2)
               << *it << " ";
        if (!((idx+1) % (m_nx+1))) myfile << std::endl;
     }
@@ -113,7 +121,7 @@ void wcdata::write_data(int x_idx,int step) const {
     for (idx=0,it = m_surf_coverages.begin();
        it!=m_surf_coverages.end();++it,++idx){
        myfile << std::scientific
-              << std::setprecision(std::numeric_limits<double>::digits10/4)
+              << std::setprecision(std::numeric_limits<double>::digits10/2)
               << *it << " ";
        if (!((idx+1) % (m_nx))) myfile << 0  << std::endl;
     }
@@ -121,11 +129,26 @@ void wcdata::write_data(int x_idx,int step) const {
     for (idx=0,it = m_temperature.begin();
        it!=m_temperature.end();++it,++idx){
        myfile << std::scientific
-              << std::setprecision(std::numeric_limits<double>::digits10/4)
+              << std::setprecision(std::numeric_limits<double>::digits10/2)
               << *it << " ";
        if (!((idx+1) % (m_nx+1))) myfile << std::endl;
     }
 
+    myfile.close();
+
+    ss.str( std::string() );
+    ss.clear();
+
+    ss << "fluxes_" << x_idx <<"_" << step << ".dat";
+    temp_string = ss.str();
+    myfile.open(temp_string.c_str());
+    for (idx=0,it = m_fluxes.begin();
+       it!=m_fluxes.end();++it,++idx){
+       myfile << std::scientific
+              << std::setprecision(std::numeric_limits<double>::digits10/2)
+              << *it << " ";
+       if (!((idx+1) % (m_nx+1))) myfile << std::endl;
+    }
     myfile.close();
 }
 
