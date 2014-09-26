@@ -32,14 +32,14 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
                                         ,double atol, double rtol
                                         ,int nx, bool with_energy
                                         ,int cells_x,double L_r, double vel, double dt, double A_V,bool from_file, int maxsteps
-                                        ,double mintemp,double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt):
+                                        ,double mintemp,double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt
+                                        ,double bulk_pressure, double heat_source):
     m_atol(atol),
     m_rtol(rtol),
     FuncEval(),
     m_integ(0),
     m_maxstep(0.0),
     m_cells_x(cells_x)
-
 
 {
 
@@ -60,7 +60,7 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
     for (int cell_idx=0;cell_idx < m_cells_x;++cell_idx){
        wc_list.push_back(new SingleWc(this,k,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity
                ,d_p,lambda_solid,nx,with_energy,cell_idx,cells_x,L_r,vel,A_V,from_file,mintemp,maxtemp,trate
-               ,rhocp, rhocp_st, inf_ext_mt));
+               ,rhocp, rhocp_st, inf_ext_mt,bulk_pressure,heat_source));
     }
 
 }
@@ -92,7 +92,6 @@ void ImplicitSurfChem_wc::getInitialConditions(doublereal t0, size_t lenc,
 
     }
 }
-
 
 /*
  *  Must be called before calling method 'advance'

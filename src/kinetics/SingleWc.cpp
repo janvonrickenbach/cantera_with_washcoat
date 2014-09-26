@@ -14,7 +14,7 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
            ,double porosity, double tortuosity
            ,double d_p, double lambda_solid
            ,int nx, bool with_energy,int x_idx, int nxcells, double L_r, double vel, double A_V,bool from_file
-           ,double mintemp, double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt):
+           ,double mintemp, double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt,double bulk_pressure, double heat_source):
       m_kin(k),
       m_transport(t),
       m_wc_coefficient_temp(h_temp),
@@ -39,7 +39,9 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
       m_trate(trate),
       m_rhocp(rhocp),
       m_rhocp_st(rhocp_st),
-      m_inf_ext_mt(inf_ext_mt)
+      m_inf_ext_mt(inf_ext_mt),
+      m_bulk_pressure(bulk_pressure),
+      m_heat_source(heat_source)
 
 {
       // Set number of corners
@@ -50,9 +52,6 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
 
       // Initialize the grid
       createGrid();
-
-      // always atmospheric pressure
-      m_bulk_pressure = 1E5;
 
       // Not more than tow phases allowed
       if (k->nPhases() > 2){
@@ -306,7 +305,7 @@ void SingleWc::createGrid(){
    grid_vector::iterator vec_it_x;
 
 
-   double ratio = 1.1;
+   double ratio = 1.0001;
    double current_dx = m_wc_thickness *(1-ratio)/(1-pow(ratio,m_nx));
    for(vec_it  = m_dx.begin();
       vec_it != m_dx.end();
@@ -388,7 +387,7 @@ void SingleWc::update_fluxes(double* state){
       prefactor_inf  = interpolate_values(m_fx[0],m_prefactor[0],m_prefactor[1]);
       if (m_inf_ext_mt){
          m_fluxes[nc][0] =(prefactor_inf *
-                   (bulk_massfraction(state,nc)- Y_1 ));
+                   (bulk_massfraction(state,nc)- Y_1 )) / (dx_inf+ m_small);
 
       }else{
          prefactor_bulk = m_bulk_diff_coeffs[nc] * m_bulk_density
@@ -420,7 +419,7 @@ void SingleWc::update_fluxes(double* state){
       T_1 = getStateVar(state,en_temperature,1,m_x_idx);
       prefactor_inf    = interpolate_values(m_fx[0],m_diff_temp[0],m_diff_temp[1]);
       if (m_inf_ext_mt){
-         m_fluxes_temp[0] = prefactor_inf * (bulk_temperature(state) - T_1);
+         m_fluxes_temp[0] = prefactor_inf * (bulk_temperature(state) - T_1) / (dx_inf+ m_small);
       }else{
          prefactor_bulk   = m_bulk_diff_temp * m_wc_coefficient_temp * dx_inf;
          prefactor_mix    = prefactor_inf * m_wc_coefficient_temp * m_bulk_diff_temp;
@@ -610,6 +609,13 @@ void SingleWc::set_state(double* state, const wcdata& data){
       }
    }
 
+   if (m_inf_ext_mt){
+      for (int nc=0;nc<m_vol_sp;++nc){
+         setStateVar(state,m_inflow_comp[nc],en_vol_comp[nc],0,m_x_idx);
+      }
+   }
+
+
 
    for(int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
       sum_val = 0.0;
@@ -648,11 +654,17 @@ void SingleWc::write_wc(int step){
 }
 
 double SingleWc::bulk_massfraction(double* y,int nc){
+   if (m_inf_ext_mt){
+      return m_inflow_comp[nc];
+   }
    return getStateVar(y,en_vol_comp[nc],0,m_x_idx);
 
 }
 
 double SingleWc::bulk_temperature(double* y){
+   if (m_inf_ext_mt and m_with_energy){
+      return m_inflow_temp;
+   }
    if (m_with_energy){
       m_bulk_temperature = getStateVar(y,en_temperature,0,m_x_idx);
  //  }else if (m_mintemp > 0.0){
@@ -663,6 +675,7 @@ double SingleWc::bulk_temperature(double* y){
  //        m_bulk_temperature = m_maxtemp-m_trate*(time-deltat);
  //     }
    }
+   // Temperature is fixed
    return m_bulk_temperature;
 }
 

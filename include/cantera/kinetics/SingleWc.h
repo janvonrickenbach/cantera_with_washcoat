@@ -30,7 +30,8 @@ public:
            ,double porosity, double tortuosity
            ,double d_p, double lambda_solid
            ,int nx, bool with_energy, int x_idx,int nxcells, double L_r, double vel, double A_V, bool from_file
-           ,double mintemp, double maxtemp, double trate,double rhocp, double rhocp_st, bool inf_ext_mt);
+           ,double mintemp, double maxtemp, double trate,double rhocp, double rhocp_st, bool inf_ext_mt
+           ,double bulk_pressure, double heat_source);
 
 
 ~SingleWc();
@@ -169,6 +170,9 @@ protected:
 
     bool m_inf_ext_mt;
 
+    doublereal m_bulk_pressure;
+    double m_heat_source;
+
     // Pointer to gas phase
     ThermoPhase* m_gas_phase;
 
@@ -181,7 +185,6 @@ protected:
     doublereal m_bulk_diff_temp;
     doublereal m_bulk_density;
     doublereal m_bulk_temperature;
-    doublereal m_bulk_pressure;
 
     // Fluxes for the species
     comp_vector m_fluxes;
