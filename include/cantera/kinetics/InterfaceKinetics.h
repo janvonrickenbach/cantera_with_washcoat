@@ -514,7 +514,7 @@ public:
                            ,double vel, double dt, double A_V
                            ,int n_output, double temperature
                            ,bool from_file, int maxiter,double mintemp, double maxtemp, double trate
-                           ,double rhocp, double rhocp_st, bool inf_ext_mt, double bulk_pressure, double heat_source);
+                           ,double rhocp, double rhocp_st, bool inf_ext_mt, double bulk_pressure, double heat_source,double cell_ratio);
 
     void advanceCoverages_wc(doublereal tstep, int iistr1_nb,int ii,double* fluxes, int maxiter,double gz);
     void write_wcdata(int iistr1_nb,int ii,double x_coord, int proc);

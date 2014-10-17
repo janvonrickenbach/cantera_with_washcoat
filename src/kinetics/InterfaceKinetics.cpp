@@ -1371,11 +1371,11 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
                                          ,int istorf, int cells_x
                                          ,double L_r, double vel, double dt, double A_V,int n_output,double temperature, bool from_file, int maxsteps
                                          ,double mintemp, double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt, double bulk_pressure
-                                         ,double heat_source){
+                                         ,double heat_source, double cell_ratio){
 
    m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity,d_p
                                             ,lambda_solid,atol,rtol,nx,with_energy,cells_x,L_r,vel,dt,A_V,from_file,maxsteps
-                                            ,mintemp,maxtemp,trate,rhocp,rhocp_st,inf_ext_mt,bulk_pressure,heat_source);
+                                            ,mintemp,maxtemp,trate,rhocp,rhocp_st,inf_ext_mt,bulk_pressure,heat_source,cell_ratio);
 
    // Create an wcdata object with the state of the kinetics object
    double time = 0.0;
@@ -1418,6 +1418,7 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
             m_integrator_wc->m_integ->setTolerances(current_tolerance,atol);
       }
    }
+   delete m_integrator_wc;
 
 }
 

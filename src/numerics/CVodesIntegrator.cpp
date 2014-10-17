@@ -462,8 +462,12 @@ void CVodesIntegrator::applyOptions()
         long int N = m_neq;
         long int nu = m_mupper;
         long int nl = m_mlower;
-        CVSpgmr(m_cvode_mem, PREC_LEFT, 0);
-        CVBandPrecInit(m_cvode_mem, N, nu, nl);
+        if (nu > 0 and nl > 0){
+           CVSpgmr(m_cvode_mem, PREC_LEFT, 0);
+           CVBandPrecInit(m_cvode_mem, N, nu, nl);
+        }else{
+           CVSpgmr(m_cvode_mem, 0, 0);
+        }
 
     } else if (m_type == BAND + NOJAC) {
         long int N = m_neq;

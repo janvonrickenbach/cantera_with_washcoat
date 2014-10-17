@@ -302,12 +302,12 @@ cdef class InterfaceKinetics(Kinetics):
             self._phase_indices[phase.name] = i
             self._phase_indices[i] = i
 
-    def advance_coverages(self,_SolutionBase gas,double h,double h_temp,double wc_thickness, double area_to_volume, double porosity, double tortuosity, double d_p, double lambda_solid, double atol, double rtol, int nx, cbool with_energy, int istorf, int x_cells, double L_reactor, double vel, double dt, double A_V,int n_output,double temperature,cbool from_file, int maxiter, double mintemp, double maxtemp, double trate,double rhocp, double rhocp_st, cbool inf_ext_mt, double bulk_pressure, double heat_source):
+    def advance_coverages(self,_SolutionBase gas,double h,double h_temp,double wc_thickness, double area_to_volume, double porosity, double tortuosity, double d_p, double lambda_solid, double atol, double rtol, int nx, cbool with_energy, int istorf, int x_cells, double L_reactor, double vel, double dt, double A_V,int n_output,double temperature,cbool from_file, int maxiter, double mintemp, double maxtemp, double trate,double rhocp, double rhocp_st, cbool inf_ext_mt, double bulk_pressure, double heat_source, double cell_ratio):
         """
         This method carries out a time-accurate advancement of the surface
         coverages for a specified amount of time.
         """
-        (<CxxInterfaceKinetics*>self.kinetics).initialize_wcmodel(gas.transport,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity,d_p,lambda_solid,atol,rtol,nx,with_energy,istorf,x_cells,L_reactor,vel,dt,A_V,n_output,temperature,from_file,maxiter,mintemp,maxtemp,trate,rhocp,rhocp_st,inf_ext_mt,bulk_pressure,heat_source)
+        (<CxxInterfaceKinetics*>self.kinetics).initialize_wcmodel(gas.transport,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity,d_p,lambda_solid,atol,rtol,nx,with_energy,istorf,x_cells,L_reactor,vel,dt,A_V,n_output,temperature,from_file,maxiter,mintemp,maxtemp,trate,rhocp,rhocp_st,inf_ext_mt,bulk_pressure,heat_source,cell_ratio)
     def advance_coverages_test(self, double dt):
         """
         This method carries out a time-accurate advancement of the surface

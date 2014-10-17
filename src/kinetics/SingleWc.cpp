@@ -14,7 +14,8 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
            ,double porosity, double tortuosity
            ,double d_p, double lambda_solid
            ,int nx, bool with_energy,int x_idx, int nxcells, double L_r, double vel, double A_V,bool from_file
-           ,double mintemp, double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt,double bulk_pressure, double heat_source):
+           ,double mintemp, double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt
+           ,double bulk_pressure, double heat_source, double cell_ratio):
       m_kin(k),
       m_transport(t),
       m_wc_coefficient_temp(h_temp),
@@ -41,7 +42,8 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
       m_rhocp_st(rhocp_st),
       m_inf_ext_mt(inf_ext_mt),
       m_bulk_pressure(bulk_pressure),
-      m_heat_source(heat_source)
+      m_heat_source(heat_source),
+      m_cell_ratio(cell_ratio)
 
 {
       // Set number of corners
@@ -94,6 +96,7 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
       if (m_with_energy){
          m_temp_rates_of_progress.resize(m_kin->nReactions());
          m_temp_delta_enthalpy.resize(m_kin->nReactions());
+         m_temp_species_enthalpy.resize(m_vol_sp,0.0);
       }
 
 
@@ -155,7 +158,9 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
 
    }
 
-SingleWc::~SingleWc(){}
+SingleWc::~SingleWc(){
+
+}
 
 
 void SingleWc::eval(doublereal time, doublereal* y,
@@ -187,17 +192,18 @@ void SingleWc::eval(doublereal time, doublereal* y,
 
          setStateVar(ydot,source,en_vol_comp[nc],g_idx_p+1,m_x_idx);
 
-         for (int nc =0;nc<m_surf_sp;++nc){
-            source = 0.0;
-            source = source + m_temp_production_rates[nc+m_vol_sp]
-                             / m_surface_phase->siteDensity()
-                             * m_area_to_volume* m_wc_thickness;
-
-            if(source != source) source = 0.0;
-            setStateVar(ydot,source,en_surf_comp[nc],g_idx_p,m_x_idx);
-         }
-
       }
+
+      for (int nc =0;nc<m_surf_sp;++nc){
+         source = 0.0;
+         source = source + m_temp_production_rates[nc+m_vol_sp]
+                          / m_surface_phase->siteDensity()
+                          * m_area_to_volume* m_wc_thickness;
+
+         if(source != source) source = 0.0;
+         setStateVar(ydot,source,en_surf_comp[nc],g_idx_p,m_x_idx);
+      }
+
       if (m_with_energy){
          if (g_idx_p+1 == m_nx and m_rhocp_st > m_small){
             dx_temp = m_rhocp_st;
@@ -210,10 +216,16 @@ void SingleWc::eval(doublereal time, doublereal* y,
 
          m_kin->getNetRatesOfProgress(&m_temp_rates_of_progress.front());
          m_kin->getDeltaEnthalpy(&m_temp_delta_enthalpy.front());
+         m_gas_phase->getEnthalpy_RT(&m_temp_species_enthalpy.front());
          for (int nr=0;nr < m_kin->nReactions();++nr){
             source -= m_area_to_volume *
                       m_temp_rates_of_progress[nr] * m_temp_delta_enthalpy[nr];
          }
+         //for (int nc=0;nc < m_vol_sp;++nc){
+         //   source -= m_area_to_volume *
+         //             m_temp_production_rates[nc] * m_temp_species_enthalpy[nc];
+         //}
+         source += m_heat_source / (m_A_V * m_wc_thickness + m_small);
          // Taking into account the thermal inertia of the solid
          if (source != source) source = 0.0;
          source = source/(m_rhocp);
@@ -305,13 +317,12 @@ void SingleWc::createGrid(){
    grid_vector::iterator vec_it_x;
 
 
-   double ratio = 1.0001;
-   double current_dx = m_wc_thickness *(1-ratio)/(1-pow(ratio,m_nx));
+   double current_dx = m_wc_thickness *(1-m_cell_ratio)/(1-pow(m_cell_ratio,m_nx));
    for(vec_it  = m_dx.begin();
       vec_it != m_dx.end();
       ++vec_it){
       *vec_it = current_dx;
-      current_dx *= ratio;
+      current_dx *= m_cell_ratio;
    }
 
 
@@ -458,7 +469,8 @@ void SingleWc::update_material_properties(double* y){
    m_bulk_density   = m_gas_phase->density();
 
    if (m_wc_coefficient_in < 0){
-      set_mt_coefficient_mladenov();
+      //set_mt_coefficient_mladenov();
+      set_mt_coefficient_kelvin();
    }
 
    // Loop over all the cells in the was coat
@@ -500,6 +512,7 @@ void SingleWc::update_material_properties(double* y){
          }
       }
 
+
       m_gas_phase->setState_TPY(temperature,m_bulk_pressure
                               ,&m_temp_vol_massfraction.front());
 
@@ -535,6 +548,19 @@ void SingleWc::set_mt_coefficient_mladenov(){
       loc_gz = gz_prefac * m_bulk_diff_coeffs[nc];
       m_wc_coefficient[nc] = (3.675 + 8.827*std::pow((1000.*loc_gz),-0.545)
                                     *std::exp(-48.2*loc_gz))*1000.0;
+   }
+}
+
+void SingleWc::set_mt_coefficient_kelvin(){
+   double dx = m_L_r/m_nxcells;
+   double L_Kelvin = 0.0023;
+   double x = (m_x_idx * dx + dx/2);
+   for (int nc=0;nc <m_vol_sp;++nc){
+      if (x <= L_Kelvin){
+        m_wc_coefficient[nc] = 18.07/L_Kelvin;
+      }else{
+        m_wc_coefficient[nc] = 14.3/L_Kelvin;
+      }
    }
 }
 

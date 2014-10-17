@@ -31,7 +31,7 @@ public:
            ,double d_p, double lambda_solid
            ,int nx, bool with_energy, int x_idx,int nxcells, double L_r, double vel, double A_V, bool from_file
            ,double mintemp, double maxtemp, double trate,double rhocp, double rhocp_st, bool inf_ext_mt
-           ,double bulk_pressure, double heat_source);
+           ,double bulk_pressure, double heat_source,double cell_ratio);
 
 
 ~SingleWc();
@@ -55,6 +55,8 @@ void set_state(double* state, const wcdata& data);
  // paper of Mladenov. This is called if the
  // masstransfer coefficient is smaller than 0
  void set_mt_coefficient_mladenov();
+
+ void set_mt_coefficient_kelvin();
 
 //Getters
 int get_nx() const {
@@ -173,6 +175,8 @@ protected:
     doublereal m_bulk_pressure;
     double m_heat_source;
 
+    double m_cell_ratio;
+
     // Pointer to gas phase
     ThermoPhase* m_gas_phase;
 
@@ -208,6 +212,7 @@ protected:
     std::vector<doublereal> m_temp_rates_of_progress;
     // Temporary arrays for reaction enthalpy
     std::vector<doublereal> m_temp_delta_enthalpy;
+    std::vector<doublereal> m_temp_species_enthalpy;
 
     // Number of cell corners
     int m_nco;

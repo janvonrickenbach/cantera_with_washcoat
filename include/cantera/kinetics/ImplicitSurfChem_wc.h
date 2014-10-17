@@ -67,6 +67,7 @@ class SingleWc;
  *
  */
 class ImplicitSurfChem_wc : public FuncEval
+
 {
 
 public:
@@ -89,7 +90,8 @@ public:
                     ,int nx,bool with_energy, int cells_x
                     ,double L_r, double vel, double dt, double A_V,bool from_file, int maxsteps
                     ,double mintemp, double maxtemp, double trate
-                    ,double rhocp, double rhocp_st, bool inf_ext_mt,double bulk_pressure, double heat_source);
+                    ,double rhocp, double rhocp_st, bool inf_ext_mt,double bulk_pressure, double heat_source
+                    ,double cell_ratio);
 
     /**
      * Destructor. Deletes the integrator.

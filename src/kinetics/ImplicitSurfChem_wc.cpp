@@ -33,7 +33,7 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
                                         ,int nx, bool with_energy
                                         ,int cells_x,double L_r, double vel, double dt, double A_V,bool from_file, int maxsteps
                                         ,double mintemp,double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt
-                                        ,double bulk_pressure, double heat_source):
+                                        ,double bulk_pressure, double heat_source, double cell_ratio):
     m_atol(atol),
     m_rtol(rtol),
     FuncEval(),
@@ -54,13 +54,17 @@ ImplicitSurfChem_wc::ImplicitSurfChem_wc(InterfaceKinetics* k
     m_integ->setMaxSteps(maxsteps);
     m_integ->setMaxErrTestFails(100);
     int bandwidth =  k->nTotalSpecies();
-    if (with_energy) bandwidth += 1;
+    if (with_energy) {
+     //  bandwidth +=  bandwidth;
+     //  bandwidth = bandwidth * nx;
+       bandwidth = -1;
+    }
     m_integ->setBandwidth(bandwidth,bandwidth);
 //    m_integ->setMaxOrder(1);
     for (int cell_idx=0;cell_idx < m_cells_x;++cell_idx){
        wc_list.push_back(new SingleWc(this,k,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity
                ,d_p,lambda_solid,nx,with_energy,cell_idx,cells_x,L_r,vel,A_V,from_file,mintemp,maxtemp,trate
-               ,rhocp, rhocp_st, inf_ext_mt,bulk_pressure,heat_source));
+               ,rhocp, rhocp_st, inf_ext_mt,bulk_pressure,heat_source,cell_ratio));
     }
 
 }
@@ -82,6 +86,9 @@ void ImplicitSurfChem_wc::eval(doublereal time, doublereal* y,
 ImplicitSurfChem_wc::~ImplicitSurfChem_wc()
 {
    delete m_integ;
+    for (int cell_idx=0;cell_idx < m_cells_x;++cell_idx){
+       delete wc_list[cell_idx];
+    }
 }
 
 void ImplicitSurfChem_wc::getInitialConditions(doublereal t0, size_t lenc,
