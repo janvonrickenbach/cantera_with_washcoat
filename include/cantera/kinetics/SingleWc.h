@@ -56,7 +56,7 @@ void set_state(double* state, const wcdata& data);
  // masstransfer coefficient is smaller than 0
  void set_mt_coefficient_mladenov();
 
- void set_mt_coefficient_kelvin();
+ void set_mt_coefficient_kelvin(double coeff);
 
 //Getters
 int get_nx() const {

@@ -470,7 +470,7 @@ void SingleWc::update_material_properties(double* y){
 
    if (m_wc_coefficient_in < 0){
       //set_mt_coefficient_mladenov();
-      set_mt_coefficient_kelvin();
+      set_mt_coefficient_kelvin(m_wc_coefficient_in);
    }
 
    // Loop over all the cells in the was coat
@@ -551,15 +551,23 @@ void SingleWc::set_mt_coefficient_mladenov(){
    }
 }
 
-void SingleWc::set_mt_coefficient_kelvin(){
+void SingleWc::set_mt_coefficient_kelvin(double mt_coeff){
    double dx = m_L_r/m_nxcells;
    double L_Kelvin = 0.0023;
    double x = (m_x_idx * dx + dx/2);
    for (int nc=0;nc <m_vol_sp;++nc){
-      if (x <= L_Kelvin){
-        m_wc_coefficient[nc] = 18.07/L_Kelvin;
+      if (mt_coeff < -10.0) {
+         if (x <= L_Kelvin){
+           m_wc_coefficient[nc] = pow(10.0/2.0,0.33)*19.9/L_Kelvin;
+         }else{
+           m_wc_coefficient[nc] = pow(10.0/2.0,0.33)*14.3/L_Kelvin;
+         }
       }else{
-        m_wc_coefficient[nc] = 14.3/L_Kelvin;
+         if (x <= L_Kelvin){
+           m_wc_coefficient[nc] = 19.9/L_Kelvin;
+         }else{
+           m_wc_coefficient[nc] = 14.3/L_Kelvin;
+         }
       }
    }
 }
