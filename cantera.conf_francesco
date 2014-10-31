@@ -1,0 +1,3 @@
+python_package = 'new'
+use_sundials = 'y'
+single_library = True
