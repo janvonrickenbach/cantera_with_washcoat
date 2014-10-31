@@ -1,0 +1,245 @@
+#***********************************************************************
+#****                                                                  *
+#****     C3H6-NO-CO-CO2-O2 SURFACE MECHANISM  ON PT/Rh              *
+#****                                                                *
+#****     D. Chatterjee, O. Deutschmann, L. Maier, J. Warnatz        *
+#****     Heidelberg University, Germany                             *
+#****     Contact: O. Deutschmann, mail@detchem.com                  *
+#****                                                                *
+#****                                                                *
+#****     Reference:                                                 *
+#****     (1)   D. Chatterjee, O. Deutschmann, J. Warnatz.           *
+#****           Detailed surface reaction mechanism in a three-way   *
+#****           catalyst. Faraday Discussions 119 (2001) 371-384     *
+#****                                                                *
+#****     SURFACE CHEMKIN format                                       *
+#****                                                                  *
+#****     Kinetic data:                                                *
+#****      k = A * T**b * exp (-Ea/RT)         A          b       Ea   *
+#****                                       (cm,mol,s)    -     kJ/mol *
+#****                                                                  *
+#****                                                                  *
+#****                                                                  *
+#****     There are three different kinds of adsorption sites:         *
+#****     Pt(S) nucleophilic  = (S)
+#****     Pt(S) electrophilic = (S2)                                   *
+#****     Rh(S1) = (S1)
+#****     The total surface is made of 75% Pt and 25% Rh, i.e.         *
+#****        the initial coverage must be 0.75 (S) amd 0.25 (S1).      *
+#****                                                                  *
+#****     The mechanism is valid only for this Pt/Rh ratio!!!          *
+#****     In particular, the coverage dependent activation energies    *
+#****     are scaled for that ratio!                                   *
+#****                                                                  *
+#***********************************************************************
+
+units(length = "cm", time = "s", quantity = "mol", act_energy = "kJ/mol")
+
+
+#
+# Define a gas mixture. This contains only major species, and no
+# gas-phase reactions. 
+# 
+ideal_gas(name = "gas",
+          elements = "O H C N Ar",
+          species = ["gri30:O2 CO2 H2O N2 CO"],
+          transport = "Mix",
+          )
+
+
+
+#
+# The platinum surface. 
+ideal_interface(name = "pt_surf",
+                elements = " Pt  H  O  C N",
+                species = """ PT(S) O(S)
+                               CO(S) CO2(S)""",
+                phases = "gas",
+                site_density = 2.72e-9,
+                reactions = "all"
+)
+
+#-------------------------------------------------------------------------------
+#  Species data 
+#-------------------------------------------------------------------------------
+                 
+species(name = "C3H6",
+    atoms = " C:3  H:6 ",
+    thermo = (
+       NASA( [  200.00,  1000.00], [  3.834645240E+00,   3.290784050E-03, 
+                5.052281840E-05,  -6.662514180E-08,   2.637075850E-11,
+                7.538382950E+02,   7.534109950E+00] ),
+       NASA( [ 1000.00,  6000.00], [  6.038704990E+00,   1.629638950E-02, 
+               -5.821306240E-06,   9.359364830E-10,  -5.586029030E-14,
+               -7.765950920E+02,  -8.438243220E+00] )
+             ),
+    transport = gas_transport(
+                     geom = "nonlinear",
+                     diam =     4.140,
+                     well_depth =   307.8,
+                     dipole =     0.0,
+                     rot_relax =     1.0),
+       )
+
+species(name = "PT(S)",
+    atoms = " Pt:1 ",
+       )
+
+species(name = "NO(S)",
+    atoms = "N:1 O:1 Pt:1 ",
+       )
+
+species(name = "NO2(S)",
+    atoms = "N:1 O:2 Pt:1 ",
+       )
+
+species(name = "N2O(S)",
+    atoms = "N:2 O:1 Pt:1 ",
+       )
+
+species(name = "N(S)",
+    atoms = "N:1 Pt:1 ",
+       )
+
+
+species(name = "O(S)",
+    atoms = " O:1  Pt:1 ",
+       )
+
+species(name = "C3H6(S)",
+    atoms = " C:3 H:6 Pt:2 ",
+       )
+
+species(name = "C2H3O(S)",
+    atoms = " C:2 H:3 O:1 Pt:1 ",
+)
+species(name = "CH3CO(S)",
+    atoms = " C:2 H:3 O:1 Pt:1 ",
+)
+species(name = "CHO(S)",
+    atoms = " C:1 H:1 O:1 Pt:1 ",
+       )
+
+species(name = "C3H5(S)",
+    atoms = " C:3 H:5 Pt:1 ",
+       )
+
+species(name = "C2H3(S)",
+    atoms = " C:2 H:3 Pt:1 ",
+       )
+
+species(name = "C3H5(S1)",
+    atoms = " C:3 H:5 Pt:1 ",
+       )
+
+species(name = "C3H4(S1)",
+    atoms = " C:3 H:4 Pt:1 ",
+       )
+
+species(name = "C3H3(S1)",
+    atoms = " C:3 H:3 Pt:1 ",
+       )
+
+species(name = "C3H2(S1)",
+    atoms = " C:3 H:2 Pt:1 ",
+       )
+
+species(name = "C2H2(S1)",
+    atoms = " C:2 H:2 Pt:1 ",
+       )
+
+species(name = "CH(S1)",
+    atoms = " C:1 H:1 Pt:1 ",
+       )
+
+
+
+species(name = "H(S)",
+    atoms = " H:1  Pt:1 ",
+       )
+
+species(name = "H2O(S)",
+    atoms = " O:1  H:2  Pt:1 ",
+       )
+
+species(name = "HCOO(S)",
+    atoms = "H:1 C:1 O:2 Pt:1 ",
+       )
+
+species(name = "OH(S)",
+    atoms = " O:1  H:1  Pt:1 ",
+       )
+
+species(name = "CO(S)",
+    atoms = " C:1  O:1  Pt:1 ",
+       )
+
+species(name = "CO2(S)",
+    atoms = " C:1  O:2  Pt:1 ",
+       )
+
+species(name = "CH3(S)",
+    atoms = " C:1  H:3  Pt:1 ",
+       )
+
+species(name = "CH2(S)",
+    atoms = " C:1  H:2  Pt:1 ",
+       )
+
+species(name = "CH(S)",
+    atoms = " C:1  H:1  Pt:1 ",
+       )
+
+species(name = "C(S)",
+    atoms = " C:1  Pt:1 ",
+       )
+
+
+
+
+#-------------------------------------------------------------------------------
+#  Reaction data 
+#-------------------------------------------------------------------------------
+
+# Adsorption reactions
+
+#
+#O2      +Pt(S)   +Pt(S)  =>O(S)    +O(S)      7.000E-02  0.0       0.0
+#				STICK
+#1
+surface_reaction("O2 + 2 PT(S) => 2 O(S)", stick(0.07,0.0,0.0))
+
+
+#6
+#surface_reaction( "CO2 + PT(S) => CO2(S)",stick(0.005, 0.0, 0.0))
+
+#7
+surface_reaction( "CO + PT(S) => CO(S)",stick(0.84, 0.0, 0.0))
+
+
+#*********************************************************************
+#**** 2. DESORPTION                   
+#*********************************************************************
+
+#8
+surface_reaction( "2 O(S) => 2 PT(S) + O2",
+                  Arrhenius(3.7E21, 0.0, 232.2,
+                            coverage = ['O(S)', 0.0, 0.0, -90]))
+
+
+#13
+surface_reaction( "CO(S) => CO + PT(S)",
+		                     Arrhenius(1E13, 0, 136.4,
+                                      coverage=['CO(S)',0.0,0.0,-33.0]))
+
+#14
+surface_reaction( "CO2(S) => CO2 + PT(S)",   [1E13, 0, 27.1])
+
+
+#co oxidation
+#47
+surface_reaction("CO(S)    + O(S)   => CO2(S)  + PT(S)",Arrhenius(3.7E20,0.0,108.0,coverage=(["CO(S)",0.0,0.0,-33.0])))
+
+#48
+surface_reaction("CO2(S)  + PT(S)  => CO(S)   + O(S) ",Arrhenius(3.70E+21,0.0,165.1,
+                                 coverage=["O(S)",0.0,0.0,45.0]))
