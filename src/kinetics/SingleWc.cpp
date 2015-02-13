@@ -13,6 +13,7 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
            ,double wc_thickness, double area_to_volume
            ,double porosity, double tortuosity
            ,double d_p, double lambda_solid
+           ,double structure_porosity, double lambda_solid_st 
            ,int nx, bool with_energy,int x_idx, int nxcells, double L_r, double vel, double A_V,bool from_file
            ,double mintemp, double maxtemp, double trate, double rhocp, double rhocp_st, bool inf_ext_mt
            ,double bulk_pressure, double heat_source, double cell_ratio):
@@ -27,6 +28,8 @@ SingleWc::SingleWc(ImplicitSurfChem_wc* surf_chem,InterfaceKinetics* k, Transpor
       m_porosity(porosity),
       m_lambda_solid(lambda_solid),
       m_tortuosity(tortuosity),
+      m_structure_porosity(structure_porosity),
+      m_lambda_solid_st(lambda_solid_st),
       m_dp(d_p),
       m_x_idx(x_idx),
       m_surf_chem(surf_chem),
@@ -169,15 +172,22 @@ void SingleWc::eval(doublereal time, doublereal* y,
    double source = 0.0;
    double dx = 0.0;
    double dx_temp;
+   double state_left  = 0.0;    // FL 
+   double state_right = 0.0;    // FL
+   double rhocp_corrected = 0.0; // FL
 
    update_material_properties(y);
    update_fluxes(y);
 
+   // FL: for the cell in washcoat direction  
+   // FL: m_nx number cells of washcoat
+   // FL: g_idx_p couter of cells in wc (g_idx_p<m_nx), g_idx_p=0 cell of bulk flow 
    for (int g_idx_p=0;g_idx_p<m_nx;++g_idx_p){
       dx = m_x_co[g_idx_p+1] - m_x_co[g_idx_p];
 
       setCanterafromState(y,g_idx_p);
       m_kin->getNetProductionRates(&m_temp_production_rates.front());
+      // gas phase
       for (int nc =0;nc<m_vol_sp;++nc){
          source = 0.0;
          source = (m_fluxes[nc][g_idx_p] - m_fluxes[nc][g_idx_p+1])/(dx+m_small);
@@ -193,7 +203,7 @@ void SingleWc::eval(doublereal time, doublereal* y,
          setStateVar(ydot,source,en_vol_comp[nc],g_idx_p+1,m_x_idx);
 
       }
-
+      // surface phase
       for (int nc =0;nc<m_surf_sp;++nc){
          source = 0.0;
          source = source + m_temp_production_rates[nc+m_vol_sp]
@@ -203,16 +213,52 @@ void SingleWc::eval(doublereal time, doublereal* y,
          if(source != source) source = 0.0;
          setStateVar(ydot,source,en_surf_comp[nc],g_idx_p,m_x_idx);
       }
-
+      // temperature
       if (m_with_energy){
-         if (g_idx_p+1 == m_nx and m_rhocp_st > m_small){
+
+
+/*         if (g_idx_p+1 == m_nx and m_rhocp_st > m_small){
+        // Taking into account the thermal inertia of the solid ??
+        // ASK JAN - not sure.  shouldn't be   dx_temp = m_rhocp_st / m_rhocp ? since at the end we do source = source/(m_rhocp); 
             dx_temp = m_rhocp_st;
          }else{
             dx_temp = dx;
-         }
+         }*/  // FL this block is removed because the thermal inertia is included in rhocp_corrected 
 
          source = 0.0;
-         source = (m_fluxes_temp[g_idx_p] - m_fluxes_temp[g_idx_p+1])/ dx_temp;
+//         source = (m_fluxes_temp[g_idx_p] - m_fluxes_temp[g_idx_p+1])/ dx_temp;
+         source = (m_fluxes_temp[g_idx_p] - m_fluxes_temp[g_idx_p+1])/ dx;
+
+         // ================================================================================== //
+         // FL : add T diffiusion along the flow direction
+         // FL : here we add the heat diffusion term in the last cell of the washcoat
+         // FL : in order to model the termal inertial of the (non reactive) catalytic support.
+         // FL : method copied from bulk_y_dot of the next code block.
+         // FL : assume adiabatic inflow and outflow of the support ...
+
+         if (g_idx_p+1 == m_nx && m_rhocp_st > m_small){                   
+             if (m_x_idx == 0 ){
+               state_left  = getStateVar(y,en_temperature,m_nx,m_x_idx);
+               state_right = getStateVar(y,en_temperature,m_nx,m_x_idx+1);
+
+             }else if(m_x_idx == m_nxcells){
+               state_left  = getStateVar(y,en_temperature,m_nx,m_x_idx-1);
+               state_right = getStateVar(y,en_temperature,m_nx,m_x_idx);
+
+             }else{
+               state_left  = getStateVar(y,en_temperature,m_nx,m_x_idx-1);
+               state_right = getStateVar(y,en_temperature,m_nx,m_x_idx+1);
+             } 
+               // note that (1.0-m_porosity)/(m_L_r/m_nxcells) is equivalent to A_struts_X / Volume_reactor_slice 
+               // diff_prefactor = m_lambda_solid * (1.0 - m_porosity) / m_rhocp_st * m_rhocp // FL i do not use this anymore because i have introduced the rhocp_corrected 
+               
+               source += m_lambda_solid * ( (1-m_structure_porosity) / m_A_V ) / dx * (state_right + state_left - 2.0 * getStateVar(y,en_temperature,m_nx,m_x_idx) ) / pow( m_L_r/m_nxcells ,2.0 )  ;
+
+             // bulk_y_dot = m_vel* (state_left-getStateVar(y,en_temperature,0,m_x_idx))/(m_L_r/m_nxcells)- m_A_V* m_fluxes_temp[0]/(m_bulk_density*cp); 
+             // setStateVar(ydot,bulk_y_dot,en_temperature,0,m_x_idx);  
+         }
+         // FL : END add T diffiusion along the flow direction
+         // ================================================================================== //
 
          m_kin->getNetRatesOfProgress(&m_temp_rates_of_progress.front());
          m_kin->getDeltaEnthalpy(&m_temp_delta_enthalpy.front());
@@ -227,8 +273,17 @@ void SingleWc::eval(doublereal time, doublereal* y,
          //}
          source += m_heat_source / (m_A_V * m_wc_thickness + m_small);
          // Taking into account the thermal inertia of the solid
+//       FL strut thermal inertia
+         if (g_idx_p+1 == m_nx && m_rhocp_st > m_small){
+        // Taking into account the thermal inertia of the solid ??
+            rhocp_corrected=  m_rhocp + m_rhocp_st * ( (1-m_structure_porosity) / m_A_V ) / dx ;
+//            rhocp_corrected=  m_rhocp_st; // FL this just replace the density but it does not add the thermal inertia of the strut to the thermal inertia of the last wc cell            
+         }else{
+            rhocp_corrected= m_rhocp;
+         }
+//       FL END thermal inertia
          if (source != source) source = 0.0;
-         source = source/(m_rhocp);
+         source = source/(rhocp_corrected);           // FL changed
          setStateVar(ydot,source,en_temperature,g_idx_p+1,m_x_idx);
       }
 
@@ -240,8 +295,9 @@ void SingleWc::eval(doublereal time, doublereal* y,
    }
 
 
+// FL : set bulk_y_dot (also for T)
    double bulk_y_dot = 0;
-   double state_left = 0.0;
+//   double state_left = 0.0;   // FL copied up ... 
    double cp;
    cp = m_gas_phase->cp_mass();
 
@@ -253,7 +309,8 @@ void SingleWc::eval(doublereal time, doublereal* y,
          else{
             state_left = getStateVar(y,en_vol_comp[nc],0,m_x_idx-1);
          }
-         bulk_y_dot = m_vel* (state_left-getStateVar(y,en_vol_comp[nc],0,m_x_idx))/(m_L_r/m_nxcells)- m_A_V* m_fluxes[nc][0]/m_bulk_density;
+         bulk_y_dot = m_vel* (state_left-getStateVar(y,en_vol_comp[nc],0,m_x_idx))/(m_L_r/m_nxcells)- m_A_V* m_fluxes[nc][0]/m_bulk_density; // discretization bulk fluxes
+                                                                                                                                              // for last cel instead of 0 m_nx (?)
 
       }else{
          bulk_y_dot = 0.0;
@@ -280,6 +337,8 @@ void SingleWc::eval(doublereal time, doublereal* y,
          setStateVar(ydot,0.0,en_temperature,0,m_x_idx);
       }
    }
+// FL : END set bulk_y_dot (also for T)
+
 
 }
 

@@ -1364,6 +1364,8 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
                                          ,doublereal tortuosity
                                          ,doublereal d_p
                                          ,doublereal lambda_solid
+                                         ,doublereal structure_porosity
+                                         ,doublereal lambda_solid_st
                                          ,doublereal atol
                                          ,doublereal rtol
                                          ,int nx
@@ -1374,7 +1376,7 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
                                          ,double heat_source, double cell_ratio){
 
    m_integrator_wc = new ImplicitSurfChem_wc(this,t,h,h_temp,wc_thickness,area_to_volume,porosity,tortuosity,d_p
-                                            ,lambda_solid,atol,rtol,nx,with_energy,cells_x,L_r,vel,dt,A_V,from_file,maxsteps
+                                            ,lambda_solid,structure_porosity,lambda_solid_st,atol,rtol,nx,with_energy,cells_x,L_r,vel,dt,A_V,from_file,maxsteps
                                             ,mintemp,maxtemp,trate,rhocp,rhocp_st,inf_ext_mt,bulk_pressure,heat_source,cell_ratio);
 
    // Create an wcdata object with the state of the kinetics object
