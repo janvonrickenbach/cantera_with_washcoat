@@ -1390,7 +1390,7 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
    write_time_file(0,0.0,false);
    m_integrator_wc->write_wc(0);
 
-   while (time < dt){
+   while (time < 0.9999*dt){
       iteration_counter++;
       try{
 
