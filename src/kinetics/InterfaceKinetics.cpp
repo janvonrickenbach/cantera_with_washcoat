@@ -1385,7 +1385,7 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
    double tout;
    double old_time = 0.0;
    m_integrator_wc->initialize();
-   int iteration_counter = 1;
+   int iteration_counter = 0;
 
    write_time_file(0,0.0,false);
    m_integrator_wc->write_wc(0);
@@ -1400,6 +1400,7 @@ void InterfaceKinetics::initialize_wcmodel(Transport* t
          m_integrator_wc->integrate(time, target_time,0);
          write_time_file(iteration_counter,time,true);
          target_time += dt/n_output;
+	 target_time = std::min(dt,target_time);
          m_integrator_wc->write_wc(iteration_counter);
          m_integrator_wc->write_wc(0);
          std::cout << "current time: " << time << " target time: " << target_time << " current rtol: " <<  current_tolerance <<std::endl;
