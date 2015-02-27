@@ -99,12 +99,17 @@ void wcdata::write_data(int x_idx,int step) const {
    std::stringstream ss;
    std::string temp_string;
 
-   ss << "grid_" << x_idx <<"_" << step << ".dat";
+   ss << "grid_"  << step << ".dat";
 
    std::cout.precision(15);
 
    temp_string = ss.str();
-   myfile.open(temp_string.c_str());
+
+   if (x_idx == 0){
+      myfile.open(temp_string.c_str());
+   }else{
+      myfile.open(temp_string.c_str(),std::ios::app);
+   }
 
     grid_vec::const_iterator it;
     int idx;
@@ -139,9 +144,15 @@ void wcdata::write_data(int x_idx,int step) const {
     ss.str( std::string() );
     ss.clear();
 
-    ss << "fluxes_" << x_idx <<"_" << step << ".dat";
+    ss << "fluxes_" << step << ".dat";
     temp_string = ss.str();
-    myfile.open(temp_string.c_str());
+
+    if (x_idx == 0){
+       myfile.open(temp_string.c_str());
+    }else{
+       myfile.open(temp_string.c_str(),std::ios::app);
+    }
+
     for (idx=0,it = m_fluxes.begin();
        it!=m_fluxes.end();++it,++idx){
        myfile << std::scientific
@@ -153,39 +164,42 @@ void wcdata::write_data(int x_idx,int step) const {
 }
 
 void wcdata::read_data(int x_idx, int step) {
-	std::ifstream myfile;
-	std::stringstream ss;
-	std::string temp_string;
-	std::string header;
-	double dummy;
+   std::ifstream myfile;
+   std::stringstream ss;
+   std::string temp_string;
+   std::string header;
+   double dummy;
 
-	ss << "grid_" << x_idx <<"_" << step << ".dat";
+   ss << "grid_" << step << ".dat";
+   temp_string = ss.str();
 
-	temp_string = ss.str();
-	myfile.open(temp_string.c_str());
+   myfile.open(temp_string.c_str());
 
-    grid_vec::iterator it;
-    int idx;
- //   std::getline(myfile,header);
+   grid_vec::iterator it;
+   int idx;
 
-    for (idx=0,it = m_vol_massfractions.begin();
-       it!=m_vol_massfractions.end();++it,++idx){
-        myfile >> *it;
-    }
+   // Reading until reached the correct x_idx
+   // Overwrites the vectors with every grid point and keeps the last one
+   for (int loc_x_idx=0; loc_x_idx<= x_idx;++loc_x_idx){
+      for (idx=0,it = m_vol_massfractions.begin();
+         it!=m_vol_massfractions.end();++it,++idx){
+          myfile >> *it;
+      }
 
 
-    for (idx=0,it = m_surf_coverages.begin();
-       it!=m_surf_coverages.end();++it,++idx){
-       myfile >> *it;
-       if (!((idx+1) % (m_nx))) myfile >> dummy;
-    }
+      for (idx=0,it = m_surf_coverages.begin();
+         it!=m_surf_coverages.end();++it,++idx){
+         myfile >> *it;
+         if (!((idx+1) % (m_nx))) myfile >> dummy;
+      }
 
-    for (idx=0,it = m_temperature.begin();
-       it!=m_temperature.end();++it,++idx){
-       myfile >> *it;
-    }
+      for (idx=0,it = m_temperature.begin();
+         it!=m_temperature.end();++it,++idx){
+         myfile >> *it;
+      }
+   }
 
-    myfile.close();
+   myfile.close();
 }
 
 } // Namespace cantera
