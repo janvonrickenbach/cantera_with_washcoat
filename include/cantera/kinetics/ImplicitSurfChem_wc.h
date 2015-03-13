@@ -86,6 +86,7 @@ public:
                     ,double wc_thickness, double area_to_volume
                     ,double porosity, double tortuosity
                     ,double d_p, double lambda_solid
+                    ,double structure_porosity, double lambda_solid_st
                     ,double atol, double rtol
                     ,int nx,bool with_energy, int cells_x
                     ,double L_r, double vel, double dt, double A_V,bool from_file, int maxsteps

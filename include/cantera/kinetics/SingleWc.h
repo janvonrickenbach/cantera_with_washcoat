@@ -29,6 +29,7 @@ public:
            ,double wc_thickness, double area_to_volume
            ,double porosity, double tortuosity
            ,double d_p, double lambda_solid
+           ,double structure_porosity, double lambda_solid_st   
            ,int nx, bool with_energy, int x_idx,int nxcells, double L_r, double vel, double A_V, bool from_file
            ,double mintemp, double maxtemp, double trate,double rhocp, double rhocp_st, bool inf_ext_mt
            ,double bulk_pressure, double heat_source,double cell_ratio);
@@ -138,7 +139,7 @@ protected:
     // Decide if energy equation is solved
     bool m_with_energy;
 
-    // Washcoat porostiy
+    // Washcoat porosity
     doublereal  m_porosity;
 
     // Washcoat solid conductivity
@@ -149,6 +150,12 @@ protected:
 
     // Washcoat pore diameter
     doublereal m_dp;
+ 
+    // Structure porosity
+    doublereal  m_structure_porosity;
+
+    // strut solid conductivity 
+    doublereal m_lambda_solid_st; 
 
     int m_x_idx;
 

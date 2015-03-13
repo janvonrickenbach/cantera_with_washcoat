@@ -1,0 +1,35 @@
+scons: Reading SConscript files ...
+INFO: Using '/usr/bin/gfortran' to build the Fortran 90 interface
+Checking for C++ header file cmath... (cached) yes
+Checking for C header file sys/times.h... (cached) yes
+Checking for C header file unistd.h... (cached) yes
+Checking whether erf is declared... (cached) yes
+Checking for C++ header file boost/math/special_functions/erf.hpp... (cached) yes
+Checking for CVodeCreate(CV_BDF, CV_NEWTON) in C++ library sundials_cvodes... (cached) yes
+Checking for double x; log(x) in C library None... (cached) no
+INFO: Using Sundials version 2.5.0
+INFO: Building the full Python package using numpy.
+WARNING: Couldn't find '3to2'. Python examples will not work correctly.
+INFO: Not building the Python 3 package because the Python 3 interpreter 'python3' could not be found
+scons: done reading SConscript files.
+scons: Building targets ...
+ConfigBuilder(["include/cantera/base/config.h"], ["include/cantera/base/config.h.in"])
+Generating include/cantera/base/config.h with the following settings:
+    CANTERA_VERSION                     "2.1a1"
+    FTN_TRAILING_UNDERSCORE             1
+    HAS_NUMPY                           1
+    HAS_SUNDIALS                        1
+    LAPACK_FTN_STRING_LEN_AT_END        1
+    LAPACK_FTN_TRAILING_UNDERSCORE      1
+    LAPACK_NAMES_LOWERCASE              1
+    RXNPATH_FONT                        "Helvetica"
+    SUNDIALS_VERSION                    25
+    WITH_HTML_LOGS                      1
+Delete("interfaces/cython/cantera/_cantera.cpp")
+cd interfaces/cython && /usr/bin/python setup2.py build_ext --build-lib=../../build/python2 --build-temp=../../build/temp-py2
+Compiling cantera/_cantera.pyx because it changed.
+Cythonizing cantera/_cantera.pyx
+running build_ext
+building 'cantera._cantera' extension
+gcc -pthread -fno-strict-aliasing -DNDEBUG -g -fwrapv -O2 -Wall -Wstrict-prototypes -fPIC -I. -I../../include -I/usr/lib/python2.7/dist-packages/numpy/core/include -I/usr/include/python2.7 -c cantera/_cantera.cpp -o ../../build/temp-py2/cantera/_cantera.o
+scons: building terminated because of errors.

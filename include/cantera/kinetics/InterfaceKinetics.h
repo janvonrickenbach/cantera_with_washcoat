@@ -506,6 +506,8 @@ public:
                            ,doublereal tortuosity
                            ,doublereal d_p
                            ,doublereal lambda_solid
+                           ,doublereal structure_porosity
+                           ,doublereal lambda_solid_st
                            ,doublereal atol
                            ,doublereal rtol
                            ,int nx
